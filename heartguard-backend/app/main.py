@@ -222,57 +222,72 @@ def calculate_emotional_manipulation_index(sentiment_drift: List[Dict], patterns
 
 def calculate_trust_score(photo_analysis: Optional[PhotoAnalysisResponse], 
                          chat_analysis: Optional[ChatAnalysisResponse]) -> tuple[int, str, str, List[str]]:
-    score = 100
     insights = []
     
-    if photo_analysis:
-        if photo_analysis.reverse_image_matches > 10:
-            score -= 30
-            insights.append(f"Photo found in {photo_analysis.reverse_image_matches} online profiles")
-        elif photo_analysis.reverse_image_matches > 5:
-            score -= 15
-            insights.append(f"Photo appears in {photo_analysis.reverse_image_matches} other locations")
-        
-        if photo_analysis.deepfake_confidence == "Suspicious":
-            score -= 25
-            insights.append("Photo shows signs of manipulation or editing")
-        elif photo_analysis.deepfake_confidence == "Fake/Deepfake":
-            score -= 40
-            insights.append("Photo likely AI-generated or heavily manipulated")
-        
-        if photo_analysis.metadata_issues:
-            score -= 10
-            insights.append(f"Photo metadata issues detected ({len(photo_analysis.metadata_issues)} problems)")
+    toneshift_score = 100
+    walletwatch_score = 100
+    photo_score = 75
+    metadata_score = 90
     
     if chat_analysis:
+        emi = chat_analysis.emotional_manipulation_index
+        toneshift_score = int((1 - emi) * 100)
+        
         critical_patterns = [p for p in chat_analysis.manipulation_patterns if p.severity == "Critical"]
         high_patterns = [p for p in chat_analysis.manipulation_patterns if p.severity == "High"]
         
+        financial_patterns = [
+            p for p in chat_analysis.manipulation_patterns 
+            if p.pattern_type in ["Financial Request", "Cryptocurrency Request", "Gift Card Request"]
+        ]
+        
+        if financial_patterns:
+            walletwatch_score = 0
+            insights.append(f"WalletWatch™: {len(financial_patterns)} financial risk pattern(s) detected")
+        
         if critical_patterns:
-            score -= len(critical_patterns) * 20
             insights.append(f"{len(critical_patterns)} critical manipulation pattern(s) detected")
         
         if high_patterns:
-            score -= len(high_patterns) * 10
             insights.append(f"{len(high_patterns)} high-risk manipulation pattern(s) detected")
         
-        if chat_analysis.emotional_manipulation_index > 0.6:
-            score -= 15
-            insights.append(f"High emotional manipulation index ({chat_analysis.emotional_manipulation_index:.2f})")
+        if emi > 0.6:
+            insights.append(f"High emotional manipulation index ({emi:.2f})")
     
-    score = max(0, min(100, score))
+    if photo_analysis:
+        if photo_analysis.reverse_image_matches > 10:
+            insights.append(f"Photo found in {photo_analysis.reverse_image_matches} online profiles")
+        elif photo_analysis.reverse_image_matches > 5:
+            insights.append(f"Photo appears in {photo_analysis.reverse_image_matches} other locations")
+        
+        if photo_analysis.deepfake_confidence == "Suspicious":
+            insights.append("Photo shows signs of manipulation or editing")
+        elif photo_analysis.deepfake_confidence == "Fake/Deepfake":
+            insights.append("Photo likely AI-generated or heavily manipulated")
+        
+        if photo_analysis.metadata_issues:
+            insights.append(f"Photo metadata issues detected ({len(photo_analysis.metadata_issues)} problems)")
     
-    if score >= 70:
+    weighted_score = (
+        (toneshift_score * 0.50) +
+        (walletwatch_score * 0.30) +
+        (photo_score * 0.15) +
+        (metadata_score * 0.05)
+    )
+    
+    final_score = int(round(weighted_score))
+    
+    if final_score >= 70:
         color_band = "green"
         confidence = "High"
-    elif score >= 40:
+    elif final_score >= 40:
         color_band = "yellow"
         confidence = "Medium"
     else:
         color_band = "red"
         confidence = "Low"
     
-    return score, confidence, color_band, insights[:3]
+    return final_score, confidence, color_band, insights[:3]
 
 @app.get("/healthz")
 async def healthz():
