@@ -1,12 +1,13 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import './App.css'
-import { Shield, Upload, MessageSquare, AlertTriangle, CheckCircle, XCircle, Heart } from 'lucide-react'
+import { Shield, Upload, MessageSquare, AlertTriangle, CheckCircle, XCircle, Heart, TrendingUp } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -50,9 +51,13 @@ function App() {
   const [report, setReport] = useState<TrustScoreReport | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [animatedScore, setAnimatedScore] = useState(0)
+  const [demoMode, setDemoMode] = useState(false)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
     if (report) {
+      playChime()
+      
       const duration = 1800 // 1.8 seconds
       const steps = 60
       const increment = report.trust_score / steps
@@ -73,6 +78,77 @@ function App() {
       setAnimatedScore(0)
     }
   }, [report])
+
+  const playChime = () => {
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+    const oscillator = audioContext.createOscillator()
+    const gainNode = audioContext.createGain()
+    
+    oscillator.connect(gainNode)
+    gainNode.connect(audioContext.destination)
+    
+    oscillator.frequency.value = 523.25
+    oscillator.type = 'sine'
+    
+    gainNode.gain.setValueAtTime(0.1, audioContext.currentTime)
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5)
+    
+    oscillator.start(audioContext.currentTime)
+    oscillator.stop(audioContext.currentTime + 0.5)
+  }
+
+  const startDemoMode = async () => {
+    setDemoMode(true)
+    setError(null)
+    setReport(null)
+    
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    
+    const demoMessages = `Hi there, how are you?
+You are my soulmate!
+I need money urgently for hospital bills.
+Please send me $500 right now via crypto!`
+    
+    setChatMessages(demoMessages)
+    
+    await new Promise(resolve => setTimeout(resolve, 2000))
+    
+    setLoading(true)
+    
+    try {
+      const formData = new FormData()
+      formData.append('chat_messages', demoMessages)
+      
+      const response = await fetch(`${API_URL}/trustscore/generate`, {
+        method: 'POST',
+        body: formData,
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to generate trust score')
+      }
+      
+      const data = await response.json()
+      setReport(data)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred')
+    } finally {
+      setLoading(false)
+      setDemoMode(false)
+    }
+  }
+
+  const highlightFinancialTerms = (text: string) => {
+    const financialKeywords = ['money', 'crypto', 'bitcoin', 'gift card', 'wire', 'transfer', 'payment', 'cash', '$', '€', '£']
+    let highlightedText = text
+    
+    financialKeywords.forEach(keyword => {
+      const regex = new RegExp(`(${keyword})`, 'gi')
+      highlightedText = highlightedText.replace(regex, '<span class="bg-red-200 text-red-900 px-1 rounded">$1</span>')
+    })
+    
+    return highlightedText
+  }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -140,7 +216,7 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#5B3256] via-[#3C4B7C] to-[#E6B7BE]" style={{ fontFamily: "'Source Sans Pro', sans-serif" }}>
+    <div className="min-h-screen bg-gradient-to-br from-[#5B3256] via-[#3C4B7C] to-[#E6B7BE] parallax-bg" style={{ fontFamily: "'Source Sans Pro', sans-serif" }}>
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         <div className="text-center mb-8 animate-fade-in">
           <div className="flex items-center justify-center mb-4">
@@ -156,6 +232,18 @@ function App() {
           <p className="text-[#F5E8DC] text-lg opacity-90">
             AI-powered emotional intelligence for safer online connections
           </p>
+          {!report && !loading && (
+            <div className="mt-6">
+              <Button
+                onClick={startDemoMode}
+                className="bg-[#E6B7BE] hover:bg-[#E6B7BE]/90 text-[#5B3256] px-6 py-3 rounded-xl shadow-lg"
+                style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 700 }}
+              >
+                <Heart className="mr-2" />
+                Watch Cinematic Demo
+              </Button>
+            </div>
+          )}
         </div>
 
         {!report ? (
@@ -351,6 +439,52 @@ function App() {
                       className="h-2 mt-2"
                     />
                   </div>
+
+                  {report.chat_analysis.sentiment_drift && report.chat_analysis.sentiment_drift.length > 0 && (
+                    <div className="bg-[#F5E8DC] p-4 rounded-xl">
+                      <h4 className="font-semibold mb-3 text-[#5B3256] text-lg flex items-center">
+                        <TrendingUp className="mr-2" />
+                        ToneShift™ Emotional Drift Chart
+                      </h4>
+                      <ResponsiveContainer width="100%" height={200}>
+                        <LineChart data={report.chat_analysis.sentiment_drift.map((point, idx) => ({
+                          message: `Msg ${idx + 1}`,
+                          sentiment: point.polarity,
+                          subjectivity: point.subjectivity
+                        }))}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#E6B7BE" />
+                          <XAxis dataKey="message" stroke="#5B3256" />
+                          <YAxis stroke="#5B3256" domain={[-1, 1]} />
+                          <Tooltip 
+                            contentStyle={{ 
+                              backgroundColor: '#F5E8DC', 
+                              border: '2px solid #E6B7BE',
+                              borderRadius: '12px'
+                            }}
+                          />
+                          <Line 
+                            type="monotone" 
+                            dataKey="sentiment" 
+                            stroke="#5B3256" 
+                            strokeWidth={3}
+                            dot={{ fill: '#5B3256', r: 5 }}
+                            name="Sentiment"
+                          />
+                          <Line 
+                            type="monotone" 
+                            dataKey="subjectivity" 
+                            stroke="#3C4B7C" 
+                            strokeWidth={2}
+                            dot={{ fill: '#3C4B7C', r: 4 }}
+                            name="Subjectivity"
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                      <p className="text-xs text-[#5B3256]/60 mt-2 text-center">
+                        Tracks emotional tone changes across conversation messages
+                      </p>
+                    </div>
+                  )}
 
                   {report.chat_analysis.manipulation_patterns.length > 0 && (
                     <div>
