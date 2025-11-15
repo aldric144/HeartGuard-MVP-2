@@ -22,6 +22,7 @@ from app.models.database import (
     ManipulationPattern as DBManipulationPattern,
     AnalysisHistory
 )
+from app.toneshift_engine import toneshift_engine
 
 load_dotenv()
 
@@ -304,24 +305,29 @@ async def analyze_photo(file: UploadFile = File(...)):
 
 @app.post("/analyze/chat", response_model=ChatAnalysisResponse)
 async def analyze_chat(request: ChatAnalysisRequest):
-    sentiment_drift = analyze_sentiment_drift(request.messages)
+    """
+    Production-ready ToneShift™ NLP Engine endpoint
+    Uses DistilBERT for sentiment analysis and manipulation pattern detection
+    """
+    messages = [{"sender": "user", "text": msg} for msg in request.messages]
     
-    manipulation_patterns = detect_manipulation_patterns(request.messages)
+    analysis = toneshift_engine.analyze_conversation(messages)
     
-    emi = calculate_emotional_manipulation_index(sentiment_drift, manipulation_patterns)
-    
-    if emi > 0.6 or any(p.severity == "Critical" for p in manipulation_patterns):
-        risk_level = "High"
-    elif emi > 0.3 or any(p.severity == "High" for p in manipulation_patterns):
-        risk_level = "Medium"
-    else:
-        risk_level = "Low"
+    manipulation_patterns = [
+        ManipulationPattern(
+            pattern_type=p["pattern_type"],
+            severity=p["severity"],
+            evidence=p["evidence"],
+            timestamp=p["timestamp"]
+        )
+        for p in analysis["manipulation_patterns"]
+    ]
     
     return ChatAnalysisResponse(
-        sentiment_drift=sentiment_drift,
+        sentiment_drift=analysis["sentiment_drift"],
         manipulation_patterns=manipulation_patterns,
-        emotional_manipulation_index=emi,
-        risk_level=risk_level
+        emotional_manipulation_index=analysis["emotional_manipulation_index"],
+        risk_level=analysis["risk_level"]
     )
 
 @app.post("/trustscore/generate", response_model=TrustScoreReport)
@@ -355,23 +361,26 @@ async def generate_trust_score(
         )
     
     if chat_messages:
-        messages = [msg.strip() for msg in chat_messages.split("\n") if msg.strip()]
-        sentiment_drift = analyze_sentiment_drift(messages)
-        manipulation_patterns = detect_manipulation_patterns(messages)
-        emi = calculate_emotional_manipulation_index(sentiment_drift, manipulation_patterns)
+        messages_list = [msg.strip() for msg in chat_messages.split("\n") if msg.strip()]
+        messages = [{"sender": "user", "text": msg} for msg in messages_list]
         
-        if emi > 0.6 or any(p.severity == "Critical" for p in manipulation_patterns):
-            risk_level = "High"
-        elif emi > 0.3 or any(p.severity == "High" for p in manipulation_patterns):
-            risk_level = "Medium"
-        else:
-            risk_level = "Low"
+        analysis = toneshift_engine.analyze_conversation(messages)
+        
+        manipulation_patterns = [
+            ManipulationPattern(
+                pattern_type=p["pattern_type"],
+                severity=p["severity"],
+                evidence=p["evidence"],
+                timestamp=p["timestamp"]
+            )
+            for p in analysis["manipulation_patterns"]
+        ]
         
         chat_analysis = ChatAnalysisResponse(
-            sentiment_drift=sentiment_drift,
+            sentiment_drift=analysis["sentiment_drift"],
             manipulation_patterns=manipulation_patterns,
-            emotional_manipulation_index=emi,
-            risk_level=risk_level
+            emotional_manipulation_index=analysis["emotional_manipulation_index"],
+            risk_level=analysis["risk_level"]
         )
     
     trust_score, confidence, color_band, insights = calculate_trust_score(photo_analysis, chat_analysis)
