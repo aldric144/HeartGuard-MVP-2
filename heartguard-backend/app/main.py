@@ -47,6 +47,9 @@ class ChatAnalysisRequest(BaseModel):
 class PhotoAnalysisResponse(BaseModel):
     image_hash: str
     reverse_image_matches: int
+    duplication_score: int
+    metadata_integrity_score: int
+    final_photo_score: int
     deepfake_confidence: str
     metadata_issues: List[str]
     risk_level: str
@@ -103,9 +106,53 @@ def detect_deepfake(image_data: bytes) -> tuple[str, List[str]]:
     except Exception as e:
         return "Unknown", [f"Error analyzing image: {str(e)}"]
 
-def simulate_reverse_image_search(image_hash: str) -> int:
+def simulate_reverse_image_search(image_hash: str, filename: str = "") -> tuple[int, int]:
     hash_sum = sum(ord(c) for c in image_hash)
-    return (hash_sum % 20) + 1
+    base_matches = (hash_sum % 20) + 1
+    
+    suspicious_keywords = ['stock', 'model', 'generic', 'sample', 'test', 'fake']
+    if any(keyword in filename.lower() for keyword in suspicious_keywords):
+        matches = base_matches + 15
+        duplication_score = max(0, 100 - (matches * 5))
+    else:
+        matches = base_matches
+        duplication_score = max(0, 100 - (matches * 3))
+    
+    return matches, duplication_score
+
+def calculate_metadata_integrity_score(image_data: bytes) -> tuple[int, List[str]]:
+    try:
+        img = Image.open(io.BytesIO(image_data))
+        issues = []
+        score = 100
+        
+        try:
+            exif_data = img._getexif()
+            if not exif_data:
+                issues.append("No EXIF metadata found")
+                score -= 50
+            elif len(exif_data) < 3:
+                issues.append("Minimal EXIF metadata (possible editing)")
+                score -= 30
+            else:
+                score = 90
+        except:
+            issues.append("Unable to read EXIF data")
+            score -= 40
+        
+        format_type = img.format
+        if format_type and format_type.upper() in ["WEBP", "BMP"]:
+            issues.append("Image format commonly used in manipulated photos")
+            score -= 10
+        
+        width, height = img.size
+        if width < 200 or height < 200:
+            issues.append("Image resolution unusually low for profile photo")
+            score -= 10
+        
+        return max(0, score), issues
+    except Exception as e:
+        return 50, [f"Error analyzing image: {str(e)}"]
 
 def analyze_sentiment_drift(messages: List[str]) -> List[Dict[str, float]]:
     drift = []
@@ -229,6 +276,9 @@ def calculate_trust_score(photo_analysis: Optional[PhotoAnalysisResponse],
     photo_score = 75
     metadata_score = 90
     
+    if photo_analysis:
+        photo_score = photo_analysis.final_photo_score
+    
     if chat_analysis:
         emi = chat_analysis.emotional_manipulation_index
         toneshift_score = int((1 - emi) * 100)
@@ -296,12 +346,17 @@ async def healthz():
 @app.post("/analyze/photo", response_model=PhotoAnalysisResponse)
 async def analyze_photo(file: UploadFile = File(...)):
     image_data = await file.read()
+    filename = file.filename or ""
     
     image_hash = hashlib.md5(image_data).hexdigest()
     
-    reverse_matches = simulate_reverse_image_search(image_hash)
+    reverse_matches, duplication_score = simulate_reverse_image_search(image_hash, filename)
     
-    deepfake_confidence, metadata_issues = detect_deepfake(image_data)
+    metadata_integrity_score, metadata_issues = calculate_metadata_integrity_score(image_data)
+    
+    deepfake_confidence, _ = detect_deepfake(image_data)
+    
+    final_photo_score = int((duplication_score * 0.6) + (metadata_integrity_score * 0.4))
     
     if reverse_matches > 10 or deepfake_confidence == "Suspicious":
         risk_level = "High"
@@ -313,6 +368,9 @@ async def analyze_photo(file: UploadFile = File(...)):
     return PhotoAnalysisResponse(
         image_hash=image_hash,
         reverse_image_matches=reverse_matches,
+        duplication_score=duplication_score,
+        metadata_integrity_score=metadata_integrity_score,
+        final_photo_score=final_photo_score,
         deepfake_confidence=deepfake_confidence,
         metadata_issues=metadata_issues,
         risk_level=risk_level
@@ -356,9 +414,14 @@ async def generate_trust_score(
     
     if photo_file:
         image_data = await photo_file.read()
+        filename = photo_file.filename or ""
         image_hash = hashlib.md5(image_data).hexdigest()
-        reverse_matches = simulate_reverse_image_search(image_hash)
-        deepfake_confidence, metadata_issues = detect_deepfake(image_data)
+        
+        reverse_matches, duplication_score = simulate_reverse_image_search(image_hash, filename)
+        metadata_integrity_score, metadata_issues = calculate_metadata_integrity_score(image_data)
+        deepfake_confidence, _ = detect_deepfake(image_data)
+        
+        final_photo_score = int((duplication_score * 0.6) + (metadata_integrity_score * 0.4))
         
         if reverse_matches > 10 or deepfake_confidence == "Suspicious":
             risk_level = "High"
@@ -370,6 +433,9 @@ async def generate_trust_score(
         photo_analysis = PhotoAnalysisResponse(
             image_hash=image_hash,
             reverse_image_matches=reverse_matches,
+            duplication_score=duplication_score,
+            metadata_integrity_score=metadata_integrity_score,
+            final_photo_score=final_photo_score,
             deepfake_confidence=deepfake_confidence,
             metadata_issues=metadata_issues,
             risk_level=risk_level
@@ -418,6 +484,9 @@ async def generate_trust_score(
             report_id=db_report.id,
             image_hash=photo_analysis.image_hash,
             reverse_image_matches=photo_analysis.reverse_image_matches,
+            duplication_score=photo_analysis.duplication_score,
+            metadata_integrity_score=photo_analysis.metadata_integrity_score,
+            final_photo_score=photo_analysis.final_photo_score,
             deepfake_confidence=photo_analysis.deepfake_confidence,
             metadata_issues=photo_analysis.metadata_issues,
             risk_level=photo_analysis.risk_level
@@ -471,6 +540,9 @@ async def get_trust_report(report_id: str, db: Session = Depends(get_db)):
         photo_analysis = PhotoAnalysisResponse(
             image_hash=db_report.photo_analysis.image_hash,
             reverse_image_matches=db_report.photo_analysis.reverse_image_matches,
+            duplication_score=db_report.photo_analysis.duplication_score or 0,
+            metadata_integrity_score=db_report.photo_analysis.metadata_integrity_score or 0,
+            final_photo_score=db_report.photo_analysis.final_photo_score or 0,
             deepfake_confidence=db_report.photo_analysis.deepfake_confidence,
             metadata_issues=db_report.photo_analysis.metadata_issues,
             risk_level=db_report.photo_analysis.risk_level
@@ -516,6 +588,9 @@ async def list_reports(db: Session = Depends(get_db)):
             photo_analysis = PhotoAnalysisResponse(
                 image_hash=db_report.photo_analysis.image_hash,
                 reverse_image_matches=db_report.photo_analysis.reverse_image_matches,
+                duplication_score=db_report.photo_analysis.duplication_score or 0,
+                metadata_integrity_score=db_report.photo_analysis.metadata_integrity_score or 0,
+                final_photo_score=db_report.photo_analysis.final_photo_score or 0,
                 deepfake_confidence=db_report.photo_analysis.deepfake_confidence,
                 metadata_issues=db_report.photo_analysis.metadata_issues,
                 risk_level=db_report.photo_analysis.risk_level
