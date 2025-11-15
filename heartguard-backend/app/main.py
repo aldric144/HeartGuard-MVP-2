@@ -66,6 +66,13 @@ class ChatAnalysisResponse(BaseModel):
     emotional_manipulation_index: float
     risk_level: str
 
+class MetadataAnalysisResponse(BaseModel):
+    profile_age_score: int
+    consistency_score: int
+    final_metadata_score: int
+    profile_age_days: int
+    consistency_issues: List[str]
+
 class TrustScoreReport(BaseModel):
     report_id: str
     trust_score: int
@@ -153,6 +160,58 @@ def calculate_metadata_integrity_score(image_data: bytes) -> tuple[int, List[str
         return max(0, score), issues
     except Exception as e:
         return 50, [f"Error analyzing image: {str(e)}"]
+
+def simulate_profile_age_check(profile_id: str) -> tuple[int, int]:
+    """
+    Simulates checking profile age based on profile ID
+    Returns (profile_age_days, profile_age_score)
+    """
+    hash_sum = sum(ord(c) for c in profile_id)
+    profile_age_days = (hash_sum % 365) + 1
+    
+    if profile_age_days < 30:
+        profile_age_score = 50
+    elif profile_age_days < 90:
+        profile_age_score = 70
+    elif profile_age_days < 180:
+        profile_age_score = 85
+    else:
+        profile_age_score = 95
+    
+    return profile_age_days, profile_age_score
+
+def simulate_consistency_check(profile_id: str) -> tuple[int, List[str]]:
+    """
+    Simulates checking profile consistency (name, location, activity patterns)
+    Returns (consistency_score, consistency_issues)
+    """
+    issues = []
+    score = 100
+    
+    generic_patterns = ['user', 'profile', 'account', 'test', '123', '456', '789']
+    if any(pattern in profile_id.lower() for pattern in generic_patterns):
+        issues.append("Generic or auto-generated profile name detected")
+        score -= 35
+    
+    suspicious_patterns = ['temp', 'fake', 'bot', 'spam']
+    if any(pattern in profile_id.lower() for pattern in suspicious_patterns):
+        issues.append("Suspicious profile name pattern detected")
+        score -= 40
+    
+    if len(profile_id) < 5:
+        issues.append("Profile name unusually short")
+        score -= 15
+    
+    if profile_id.isdigit():
+        issues.append("Profile name is only numbers")
+        score -= 30
+    
+    hash_sum = sum(ord(c) for c in profile_id)
+    if hash_sum % 3 == 0:
+        issues.append("Location/activity mismatch detected")
+        score -= 20
+    
+    return max(0, score), issues
 
 def analyze_sentiment_drift(messages: List[str]) -> List[Dict[str, float]]:
     drift = []
@@ -268,7 +327,8 @@ def calculate_emotional_manipulation_index(sentiment_drift: List[Dict], patterns
     return round(emi, 3)
 
 def calculate_trust_score(photo_analysis: Optional[PhotoAnalysisResponse], 
-                         chat_analysis: Optional[ChatAnalysisResponse]) -> tuple[int, str, str, List[str]]:
+                         chat_analysis: Optional[ChatAnalysisResponse],
+                         metadata_analysis: Optional[MetadataAnalysisResponse] = None) -> tuple[int, str, str, List[str]]:
     insights = []
     
     toneshift_score = 100
@@ -278,6 +338,9 @@ def calculate_trust_score(photo_analysis: Optional[PhotoAnalysisResponse],
     
     if photo_analysis:
         photo_score = photo_analysis.final_photo_score
+    
+    if metadata_analysis:
+        metadata_score = metadata_analysis.final_metadata_score
     
     if chat_analysis:
         emi = chat_analysis.emotional_manipulation_index
@@ -403,14 +466,35 @@ async def analyze_chat(request: ChatAnalysisRequest):
         risk_level=analysis["risk_level"]
     )
 
+@app.post("/analyze/metadata", response_model=MetadataAnalysisResponse)
+async def analyze_metadata(profile_id: str = Form(...)):
+    """
+    Metadata Integrity Engine endpoint
+    Analyzes profile age and consistency to detect suspicious accounts
+    """
+    profile_age_days, profile_age_score = simulate_profile_age_check(profile_id)
+    consistency_score, consistency_issues = simulate_consistency_check(profile_id)
+    
+    final_metadata_score = int((profile_age_score + consistency_score) / 2)
+    
+    return MetadataAnalysisResponse(
+        profile_age_score=profile_age_score,
+        consistency_score=consistency_score,
+        final_metadata_score=final_metadata_score,
+        profile_age_days=profile_age_days,
+        consistency_issues=consistency_issues
+    )
+
 @app.post("/trustscore/generate", response_model=TrustScoreReport)
 async def generate_trust_score(
     photo_file: Optional[UploadFile] = File(None),
     chat_messages: Optional[str] = Form(None),
+    profile_id: Optional[str] = Form(None),
     db: Session = Depends(get_db)
 ):
     photo_analysis = None
     chat_analysis = None
+    metadata_analysis = None
     
     if photo_file:
         image_data = await photo_file.read()
@@ -464,7 +548,20 @@ async def generate_trust_score(
             risk_level=analysis["risk_level"]
         )
     
-    trust_score, confidence, color_band, insights = calculate_trust_score(photo_analysis, chat_analysis)
+    if profile_id:
+        profile_age_days, profile_age_score = simulate_profile_age_check(profile_id)
+        consistency_score, consistency_issues = simulate_consistency_check(profile_id)
+        final_metadata_score = int((profile_age_score + consistency_score) / 2)
+        
+        metadata_analysis = MetadataAnalysisResponse(
+            profile_age_score=profile_age_score,
+            consistency_score=consistency_score,
+            final_metadata_score=final_metadata_score,
+            profile_age_days=profile_age_days,
+            consistency_issues=consistency_issues
+        )
+    
+    trust_score, confidence, color_band, insights = calculate_trust_score(photo_analysis, chat_analysis, metadata_analysis)
     
     report_id = str(uuid.uuid4())
     
