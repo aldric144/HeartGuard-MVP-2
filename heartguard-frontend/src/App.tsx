@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import './App.css'
-import { Shield, Upload, MessageSquare, AlertTriangle, CheckCircle, XCircle, Heart, TrendingUp } from 'lucide-react'
+import { Shield, Upload, MessageSquare, AlertTriangle, CheckCircle, XCircle, Heart, TrendingUp, Globe } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -8,6 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { ScamHotspotMap } from '@/components/ScamHotspotMap'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -89,6 +90,7 @@ function App() {
   const [timeline, setTimeline] = useState<TimelineData | null>(null)
   const [analytics, setAnalytics] = useState<PatternAnalytics | null>(null)
   const [showTimeline, setShowTimeline] = useState(false)
+  const [showHotspotMap, setShowHotspotMap] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
@@ -292,7 +294,7 @@ Please send me $500 right now via crypto!`
             AI-powered emotional intelligence for safer online connections
           </p>
           {!report && !loading && (
-            <div className="mt-6">
+            <div className="mt-6 flex gap-4 justify-center">
               <Button
                 onClick={startDemoMode}
                 className="bg-[#E6B7BE] hover:bg-[#E6B7BE]/90 text-[#5B3256] px-6 py-3 rounded-xl shadow-lg"
@@ -301,11 +303,26 @@ Please send me $500 right now via crypto!`
                 <Heart className="mr-2" />
                 Watch Cinematic Demo
               </Button>
+              <Button
+                onClick={() => setShowHotspotMap(!showHotspotMap)}
+                className="bg-[#3C4B7C] hover:bg-[#3C4B7C]/90 text-white px-6 py-3 rounded-xl shadow-lg"
+                style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 700 }}
+              >
+                <Globe className="mr-2" />
+                {showHotspotMap ? 'Hide' : 'View'} Scam Hotspot Map™
+              </Button>
             </div>
           )}
         </div>
 
-        {!report ? (
+        {/* Scam Hotspot Map Section */}
+        {showHotspotMap && !report && (
+          <div className="mb-8 animate-fade-in">
+            <ScamHotspotMap />
+          </div>
+        )}
+
+        {!report && !showHotspotMap ? (
           <div className="grid md:grid-cols-2 gap-6 mb-8">
             <Card className="bg-white/95 border-[#E6B7BE] border-2 rounded-xl shadow-lg animate-fade-in">
               <CardHeader>
