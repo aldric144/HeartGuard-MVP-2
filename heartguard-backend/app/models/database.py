@@ -144,6 +144,18 @@ class SafetyReply(Base):
     context = Column(String, nullable=True)
     priority = Column(Integer, default=1)
 
+class TrustedContact(Base):
+    __tablename__ = "trusted_contacts"
+    
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_identifier = Column(String, index=True)
+    contact_name = Column(String)
+    contact_email_or_phone = Column(String)
+    alert_preference = Column(String, default='EMAIL')
+    is_active = Column(Boolean, default=True)
+    last_alert_timestamp = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./heartguard.db")
 
 engine = create_engine(DATABASE_URL)

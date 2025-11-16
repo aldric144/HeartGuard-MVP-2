@@ -782,6 +782,21 @@ async def generate_trust_score(
     db.commit()
     db.refresh(db_report)
     
+    if trust_score < 50 and conversation:
+        from app.models.database import TrustedContact
+        
+        # Log potential alert for all linked trusted contacts
+        contacts = db.query(TrustedContact).filter(
+            TrustedContact.user_identifier == conversation.id,
+            TrustedContact.is_active == True
+        ).all()
+        
+        if contacts:
+            print(f"⚠️ Guardian Mode Alert: Trust score {trust_score} below threshold for conversation {conversation.id}")
+            print(f"📧 Would notify {len(contacts)} trusted contact(s):")
+            for contact in contacts:
+                print(f"   - {contact.contact_name} ({contact.contact_email_or_phone}) via {contact.alert_preference}")
+    
     report = TrustScoreReport(
         report_id=report_id,
         trust_score=trust_score,
@@ -1161,5 +1176,89 @@ async def get_safety_replies(
                 "priority": reply.priority
             }
             for reply in safety_replies
+        ]
+    }
+
+
+@app.post("/guardian/contact/add")
+async def add_trusted_contact(
+    user_identifier: str,
+    contact_name: str,
+    contact_email_or_phone: str,
+    alert_preference: str = 'EMAIL',
+    db: Session = Depends(get_db)
+):
+    """
+    Add a trusted contact for Guardian Mode alerts.
+    
+    Args:
+        user_identifier: User ID or conversation ID
+        contact_name: Name of the trusted contact
+        contact_email_or_phone: Email or phone number for alerts
+        alert_preference: Alert method (EMAIL, SMS, NONE)
+        db: Database session
+        
+    Returns:
+        Created trusted contact record
+    """
+    from app.models.database import TrustedContact
+    
+    trusted_contact = TrustedContact(
+        user_identifier=user_identifier,
+        contact_name=contact_name,
+        contact_email_or_phone=contact_email_or_phone,
+        alert_preference=alert_preference,
+        is_active=True
+    )
+    
+    db.add(trusted_contact)
+    db.commit()
+    db.refresh(trusted_contact)
+    
+    return {
+        "id": trusted_contact.id,
+        "user_identifier": trusted_contact.user_identifier,
+        "contact_name": trusted_contact.contact_name,
+        "contact_email_or_phone": trusted_contact.contact_email_or_phone,
+        "alert_preference": trusted_contact.alert_preference,
+        "is_active": trusted_contact.is_active,
+        "created_at": trusted_contact.created_at.isoformat() + "Z"
+    }
+
+
+@app.get("/guardian/contacts/{user_identifier}")
+async def get_trusted_contacts(
+    user_identifier: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Get all active trusted contacts for a user.
+    
+    Args:
+        user_identifier: User ID or conversation ID
+        db: Database session
+        
+    Returns:
+        List of active trusted contacts
+    """
+    from app.models.database import TrustedContact
+    
+    contacts = db.query(TrustedContact).filter(
+        TrustedContact.user_identifier == user_identifier,
+        TrustedContact.is_active == True
+    ).all()
+    
+    return {
+        "user_identifier": user_identifier,
+        "contacts": [
+            {
+                "id": contact.id,
+                "contact_name": contact.contact_name,
+                "contact_email_or_phone": contact.contact_email_or_phone,
+                "alert_preference": contact.alert_preference,
+                "last_alert_timestamp": contact.last_alert_timestamp.isoformat() + "Z" if contact.last_alert_timestamp else None,
+                "created_at": contact.created_at.isoformat() + "Z"
+            }
+            for contact in contacts
         ]
     }
