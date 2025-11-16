@@ -51,15 +51,16 @@ export function ScamHotspotMap() {
   const [error, setError] = useState<string | null>(null)
   const [selectedRegion, setSelectedRegion] = useState<RegionData | null>(null)
 
-  const checkPhoneNumber = async () => {
-    if (!phoneNumber.trim()) return
+  const checkPhoneNumber = async (codeToCheck?: string) => {
+    const code = codeToCheck || phoneNumber
+    if (!code.trim()) return
 
     setLoading(true)
     setError(null)
     setResult(null)
 
     try {
-      const response = await fetch(`${API_URL}/analyze/location/${encodeURIComponent(phoneNumber)}`)
+      const response = await fetch(`${API_URL}/analyze/location/${encodeURIComponent(code)}`)
       if (!response.ok) throw new Error('Failed to check phone number')
       const data = await response.json()
       setResult(data)
@@ -68,6 +69,11 @@ export function ScamHotspotMap() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const quickCheck = (code: string) => {
+    setPhoneNumber(code)
+    checkPhoneNumber(code)
   }
 
   const getRiskColor = (riskLevel: string) => {
@@ -109,12 +115,21 @@ export function ScamHotspotMap() {
                 {/* World Map SVG */}
                 <svg viewBox="0 0 100 70" className="w-full h-auto">
                   {/* Ocean background */}
-                  <rect x="0" y="0" width="100" height="70" fill="#E0F2FE" opacity="0.3" />
+                  <rect x="0" y="0" width="100" height="70" fill="#DBEAFE" opacity="0.5" />
                   
-                  {/* Simplified continents */}
-                  <path d="M 10 35 Q 15 30 20 35 Q 25 40 30 35 L 35 40 L 30 45 L 25 50 L 20 48 L 15 45 Z" fill="#D1D5DB" opacity="0.4" />
-                  <path d="M 40 25 Q 45 20 50 25 Q 55 30 60 28 L 65 35 L 60 40 L 55 38 L 50 35 Z" fill="#D1D5DB" opacity="0.4" />
-                  <path d="M 65 40 Q 70 35 75 40 Q 80 45 85 43 L 88 48 L 83 52 L 78 50 L 73 48 Z" fill="#D1D5DB" opacity="0.4" />
+                  {/* Continents with better contrast */}
+                  {/* North America */}
+                  <path d="M 8 30 L 12 25 L 18 22 L 24 24 L 28 28 L 30 35 L 28 42 L 24 48 L 20 50 L 15 48 L 12 45 L 10 40 L 8 35 Z" fill="#CBD5E1" stroke="#475569" strokeWidth="0.3" opacity="0.8" />
+                  {/* South America */}
+                  <path d="M 24 52 L 28 50 L 32 52 L 34 58 L 32 65 L 28 68 L 24 66 L 22 60 L 23 54 Z" fill="#CBD5E1" stroke="#475569" strokeWidth="0.3" opacity="0.8" />
+                  {/* Europe */}
+                  <path d="M 45 28 L 50 25 L 56 26 L 60 30 L 58 35 L 54 38 L 48 36 L 45 32 Z" fill="#CBD5E1" stroke="#475569" strokeWidth="0.3" opacity="0.8" />
+                  {/* Africa */}
+                  <path d="M 46 40 L 50 38 L 56 40 L 58 45 L 58 52 L 56 60 L 52 66 L 48 64 L 46 58 L 44 50 L 45 44 Z" fill="#CBD5E1" stroke="#475569" strokeWidth="0.3" opacity="0.8" />
+                  {/* Asia */}
+                  <path d="M 62 28 L 68 24 L 75 26 L 82 30 L 88 35 L 90 42 L 88 48 L 82 52 L 76 54 L 70 52 L 65 48 L 62 42 L 60 35 Z" fill="#CBD5E1" stroke="#475569" strokeWidth="0.3" opacity="0.8" />
+                  {/* Australia */}
+                  <path d="M 78 58 L 84 56 L 88 58 L 90 62 L 88 66 L 82 68 L 78 66 L 76 62 Z" fill="#CBD5E1" stroke="#475569" strokeWidth="0.3" opacity="0.8" />
                   
                   {/* Hotspot markers */}
                   {HOTSPOT_REGIONS.map((region, idx) => (
@@ -122,21 +137,36 @@ export function ScamHotspotMap() {
                       <circle
                         cx={region.position.x}
                         cy={region.position.y}
-                        r="3"
+                        r="2.5"
                         fill={region.color}
-                        opacity="0.8"
+                        opacity="0.9"
                         className="cursor-pointer hover:opacity-100 transition-opacity"
-                        onClick={() => setSelectedRegion(region)}
+                        onClick={() => {
+                          setSelectedRegion(region)
+                          quickCheck(region.codes[0])
+                        }}
                       />
                       <circle
                         cx={region.position.x}
                         cy={region.position.y}
-                        r="5"
+                        r="4.5"
                         fill={region.color}
-                        opacity="0.2"
+                        opacity="0.3"
                         className="animate-ping"
                         style={{ animationDuration: '2s' }}
                       />
+                      {/* Region label */}
+                      <text
+                        x={region.position.x}
+                        y={region.position.y - 4}
+                        fontSize="2.5"
+                        fill="#1E293B"
+                        textAnchor="middle"
+                        className="pointer-events-none font-semibold"
+                        style={{ textShadow: '0 0 2px white' }}
+                      >
+                        {region.name}
+                      </text>
                     </g>
                   ))}
                 </svg>
@@ -191,21 +221,59 @@ export function ScamHotspotMap() {
                   <Search className="mr-2 h-5 w-5 text-[#E6B7BE]" />
                   Number Origin Finder
                 </h3>
-                <p className="text-sm text-[#5B3256]/70 mb-3">
+                <p className="text-sm text-[#5B3256]/70 mb-2">
                   Check any phone number or country code for fraud risk
                 </p>
+                <p className="text-xs text-[#5B3256] font-medium mb-3 bg-[#F5E8DC] p-2 rounded">
+                  💡 Full number not required. Try <span className="font-bold">+234</span> or <span className="font-bold">+1-876</span>
+                </p>
                 <div className="space-y-3">
+                  {/* Quick test chips */}
+                  <div className="flex flex-wrap gap-1.5">
+                    <Button
+                      onClick={() => quickCheck('+234')}
+                      size="sm"
+                      variant="outline"
+                      className="text-xs h-7 px-2 border-red-600 text-red-600 hover:bg-red-50"
+                    >
+                      +234 Nigeria
+                    </Button>
+                    <Button
+                      onClick={() => quickCheck('+1-876')}
+                      size="sm"
+                      variant="outline"
+                      className="text-xs h-7 px-2 border-red-600 text-red-600 hover:bg-red-50"
+                    >
+                      +1-876 Jamaica
+                    </Button>
+                    <Button
+                      onClick={() => quickCheck('+63')}
+                      size="sm"
+                      variant="outline"
+                      className="text-xs h-7 px-2 border-red-600 text-red-600 hover:bg-red-50"
+                    >
+                      +63 Philippines
+                    </Button>
+                    <Button
+                      onClick={() => quickCheck('+86')}
+                      size="sm"
+                      variant="outline"
+                      className="text-xs h-7 px-2 border-orange-600 text-orange-600 hover:bg-orange-50"
+                    >
+                      +86 China
+                    </Button>
+                  </div>
                   <div className="flex gap-2">
                     <Input
                       type="text"
-                      placeholder="e.g., +234, +1-876, +1 (876) 555-1234"
+                      placeholder="e.g., +234, +1-876, or full number"
                       value={phoneNumber}
                       onChange={(e) => setPhoneNumber(e.target.value)}
                       onKeyPress={(e) => e.key === 'Enter' && checkPhoneNumber()}
                       className="bg-[#F5E8DC] border-[#E6B7BE] text-[#5B3256] placeholder:text-[#5B3256]/50 text-sm"
                     />
                     <Button
-                      onClick={checkPhoneNumber}
+                      onClick={() => checkPhoneNumber()}
                       disabled={loading || !phoneNumber.trim()}
                       className="bg-[#5B3256] hover:bg-[#5B3256]/90 text-white"
                       size="sm"
