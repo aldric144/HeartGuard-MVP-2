@@ -168,6 +168,16 @@ export function GuardianMode({ conversationId, onClose }: GuardianModeProps) {
                 <CardDescription className="text-[#5B3256]/70">
                   FamilyLink™ - Protect your loved ones with smart alerts
                 </CardDescription>
+                <div className="bg-[#F5E8DC] p-3 rounded-lg mt-3">
+                  <p className="text-xs text-[#5B3256] font-semibold mb-1">
+                    📊 Trust Score Guide:
+                  </p>
+                  <div className="flex gap-4 text-xs">
+                    <span className="text-blue-600 font-semibold">70-100: Low Risk (Safe)</span>
+                    <span className="text-orange-600 font-semibold">40-69: Medium Risk (Caution)</span>
+                    <span className="text-red-600 font-semibold">0-39: High Risk (Danger!)</span>
+                  </div>
+                </div>
               </div>
             </div>
             <Button
@@ -285,19 +295,37 @@ export function GuardianMode({ conversationId, onClose }: GuardianModeProps) {
 
                     <div>
                       <label className="block text-sm font-semibold text-[#5B3256] mb-2">
-                        Alert Threshold: {newContactThreshold}
+                        Minimum Safe Score: {newContactThreshold}
                       </label>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        value={newContactThreshold}
-                        onChange={(e) => setNewContactThreshold(parseInt(e.target.value))}
-                        className="w-full"
-                      />
-                      <p className="text-xs text-[#5B3256]/70 mt-1">
-                        Alert when trust score drops below {newContactThreshold}
-                      </p>
+                      <div className="relative">
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          value={newContactThreshold}
+                          onChange={(e) => setNewContactThreshold(parseInt(e.target.value))}
+                          className="w-full h-8 appearance-none bg-transparent cursor-pointer"
+                          style={{
+                            background: `linear-gradient(to right, 
+                              #dc2626 0%, #dc2626 39%, 
+                              #f59e0b 40%, #f59e0b 69%, 
+                              #3b82f6 70%, #3b82f6 100%)`
+                          }}
+                        />
+                      </div>
+                      <div className="flex justify-between text-xs mt-2 mb-1">
+                        <span className="text-red-600 font-semibold">0 High Risk</span>
+                        <span className="text-orange-600 font-semibold">40 Medium</span>
+                        <span className="text-blue-600 font-semibold">70 Low Risk</span>
+                      </div>
+                      <div className="bg-[#F5E8DC] p-3 rounded-lg mt-2">
+                        <p className="text-xs text-[#5B3256] font-semibold mb-1">
+                          ⚠️ You'll be alerted when trust score drops below {newContactThreshold}
+                        </p>
+                        <p className="text-xs text-[#5B3256]/70">
+                          Lower score = Higher risk. Score below {newContactThreshold} means entering the danger zone!
+                        </p>
+                      </div>
                     </div>
 
                     <div className="flex gap-2">
@@ -348,9 +376,12 @@ export function GuardianMode({ conversationId, onClose }: GuardianModeProps) {
                             <div className="flex items-center gap-2 mb-2">
                               <h3 className="text-lg font-bold text-[#5B3256]">{contact.contact_name}</h3>
                               <Badge className="bg-[#3C4B7C] text-white">
-                                Threshold: {contact.alert_threshold}
+                                Min Safe Score: {contact.alert_threshold}
                               </Badge>
                             </div>
+                            <p className="text-xs text-[#5B3256]/60 mb-2">
+                              Alerts when score drops below {contact.alert_threshold} (high risk)
+                            </p>
                             <div className="space-y-1 text-sm text-[#5B3256]/70">
                               <div className="flex items-center gap-2">
                                 <Mail className="w-4 h-4" />
@@ -421,7 +452,17 @@ export function GuardianMode({ conversationId, onClose }: GuardianModeProps) {
                         </div>
                         <div className="space-y-1 text-sm">
                           <p className="text-[#5B3256] font-semibold">{alert.reason}</p>
-                          <div className="flex items-center gap-4 text-[#5B3256]/70">
+                          <div className="bg-red-50 border border-red-200 rounded p-2 mt-2">
+                            <p className="text-xs text-red-800 font-semibold">
+                              ⚠️ Trust Score {alert.trust_score} {'<'} Minimum Safe Score {alert.threshold}
+                            </p>
+                            <p className="text-xs text-red-700">
+                              {alert.trust_score < 30 ? 'HIGH RISK - Immediate attention needed!' :
+                               alert.trust_score < 50 ? 'MEDIUM-HIGH RISK - Exercise caution' :
+                               'MEDIUM RISK - Monitor closely'}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-4 text-[#5B3256]/70 mt-2">
                             <span>Channel: {alert.channel}</span>
                             <span>Status: {alert.status}</span>
                           </div>
