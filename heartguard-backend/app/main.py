@@ -1,5 +1,6 @@
-from fastapi import FastAPI, UploadFile, File, Form, Depends
+from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Dict, Optional
 from sqlalchemy.orm import Session
@@ -27,6 +28,7 @@ from app.models.database import (
     populate_geographic_risks
 )
 from app.toneshift_engine import toneshift_engine
+from app.evidence_locker import generate_evidence_pdf
 import re
 
 load_dotenv()
@@ -1004,3 +1006,49 @@ async def analyze_location(phone_number_or_code: str, db: Session = Depends(get_
             location_risk_score=100,
             risk_rationale="No known high-risk origin detected for this code"
         )
+
+@app.get("/evidence/generate/{conversation_id}")
+async def generate_evidence_report(
+    conversation_id: str, 
+    phone_code: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Generate legal-grade Evidence Locker PDF report for a conversation.
+    
+    Args:
+        conversation_id: UUID of the conversation to generate report for
+        phone_code: Optional phone code to include geographic risk data (e.g., +234)
+        db: Database session
+        
+    Returns:
+        StreamingResponse with PDF file
+    """
+    conversation = db.query(DBConversation).filter(DBConversation.id == conversation_id).first()
+    
+    if not conversation:
+        raise HTTPException(status_code=404, detail=f"Conversation {conversation_id} not found")
+    
+    analysis_points = db.query(DBAnalysisPoint).filter(
+        DBAnalysisPoint.conversation_id == conversation_id
+    ).order_by(DBAnalysisPoint.message_index.asc()).all()
+    
+    geographic_risk = None
+    if phone_code:
+        normalized_code = normalize_phone_number(phone_code)
+        geographic_risk = db.query(GeographicRisk).filter(
+            GeographicRisk.code == normalized_code
+        ).first()
+    
+    pdf_buffer = generate_evidence_pdf(conversation, analysis_points, geographic_risk)
+    
+    timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+    filename = f"HeartGuard_Evidence_{conversation_id[:8]}_{timestamp}.pdf"
+    
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}"
+        }
+    )
