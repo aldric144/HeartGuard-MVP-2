@@ -952,6 +952,83 @@ Please send me $500 right now via crypto!`
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-[#5B3256] mb-2">
+                    Suspected IP Addresses (Optional)
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={suspectedIPs}
+                      onChange={(e) => setSuspectedIPs(e.target.value)}
+                      placeholder="e.g., 192.168.1.1, 8.8.8.8 (comma or space separated)"
+                      className="flex-1 px-4 py-2 bg-[#F5E8DC] border-[#E6B7BE] border-2 rounded-xl text-[#5B3256] placeholder:text-[#5B3256]/50"
+                    />
+                    <Button
+                      onClick={analyzeIPs}
+                      disabled={loadingIP || !suspectedIPs.trim()}
+                      className="bg-[#3C4B7C] hover:bg-[#3C4B7C]/90 text-white"
+                    >
+                      {loadingIP ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      ) : (
+                        'Check IPs'
+                      )}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-[#5B3256]/60 mt-1">
+                    We'll check if they're using VPN, proxy, or Tor to hide their location
+                  </p>
+                </div>
+                {ipIntelligence.length > 0 && (
+                  <div className="space-y-3">
+                    <h4 className="font-semibold text-[#5B3256]">IP Intelligence Results:</h4>
+                    {ipIntelligence.map((intel, idx) => (
+                      <Alert key={idx} className={`${
+                        intel.risk_level === 'High' ? 'bg-red-50 border-red-300' :
+                        intel.risk_level === 'Medium' ? 'bg-yellow-50 border-yellow-300' :
+                        'bg-green-50 border-green-300'
+                      }`}>
+                        <AlertDescription>
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="font-semibold text-[#5B3256]">{intel.ip}</span>
+                              <span className={`px-2 py-1 rounded text-xs font-bold ${
+                                intel.risk_level === 'High' ? 'bg-red-600 text-white' :
+                                intel.risk_level === 'Medium' ? 'bg-yellow-600 text-white' :
+                                'bg-green-600 text-white'
+                              }`}>
+                                {intel.risk_level} Risk
+                              </span>
+                            </div>
+                            {intel.success ? (
+                              <>
+                                <div className="text-sm text-[#5B3256]">
+                                  <strong>Location:</strong> {intel.city}, {intel.region}, {intel.country} ({intel.country_code})
+                                </div>
+                                <div className="text-sm text-[#5B3256]">
+                                  <strong>ISP:</strong> {intel.isp || 'Unknown'}
+                                </div>
+                                {(intel.is_vpn || intel.is_proxy || intel.is_tor || intel.is_datacenter) && (
+                                  <div className="flex flex-wrap gap-2 mt-2">
+                                    {intel.is_vpn && <span className="px-2 py-1 bg-red-100 text-red-800 rounded text-xs font-semibold">🔒 VPN Detected</span>}
+                                    {intel.is_proxy && <span className="px-2 py-1 bg-red-100 text-red-800 rounded text-xs font-semibold">🌐 Proxy Detected</span>}
+                                    {intel.is_tor && <span className="px-2 py-1 bg-red-100 text-red-800 rounded text-xs font-semibold">🕵️ Tor Network</span>}
+                                    {intel.is_datacenter && <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-xs font-semibold">🖥️ Datacenter IP</span>}
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <div className="text-sm text-red-600">
+                                {intel.message || 'Failed to analyze IP'}
+                              </div>
+                            )}
+                          </div>
+                        </AlertDescription>
+                      </Alert>
+                    ))}
+                  </div>
+                )}
+                <div>
+                  <label className="block text-sm font-semibold text-[#5B3256] mb-2">
                     Your Statement (What Happened)
                   </label>
                   <Textarea
