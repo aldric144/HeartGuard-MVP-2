@@ -9,6 +9,7 @@ import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { ScamHotspotMap } from '@/components/ScamHotspotMap'
+import { SafetyReplyCard } from '@/components/SafetyReplyCard'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -79,6 +80,15 @@ interface PatternAnalytics {
   average_message_count: number
 }
 
+interface SafetyReply {
+  id: number
+  trigger_type: string
+  risk_level: string
+  reply_text: string
+  context: string
+  priority: number
+}
+
 function App() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [chatMessages, setChatMessages] = useState('')
@@ -91,6 +101,7 @@ function App() {
   const [analytics, setAnalytics] = useState<PatternAnalytics | null>(null)
   const [showTimeline, setShowTimeline] = useState(false)
   const [showHotspotMap, setShowHotspotMap] = useState(false)
+  const [safetyReplies, setSafetyReplies] = useState<SafetyReply[]>([])
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
@@ -232,6 +243,25 @@ Please send me $500 right now via crypto!`
           if (timelineResponse.ok) {
             const timelineData = await timelineResponse.json()
             setTimeline(timelineData)
+            
+            const hasWalletFlags = timelineData.messages?.some((m: TimelineMessage) => m.wallet_watch_flag)
+            const hasLargeTrustDrop = timelineData.messages?.some((m: TimelineMessage) => m.trust_score_delta < -20)
+            const hasLargeToneShift = timelineData.messages?.some((m: TimelineMessage) => Math.abs(m.tone_shift_delta) > 20)
+            
+            if (hasWalletFlags || hasLargeTrustDrop || hasLargeToneShift || data.trust_score < 50) {
+              const triggerType = hasWalletFlags ? 'wallet_watch' : hasLargeTrustDrop ? 'trust_drop' : hasLargeToneShift ? 'tone_shift' : 'general'
+              const riskLevel = data.trust_score < 30 ? 'extreme' : 'high'
+              
+              try {
+                const safetyResponse = await fetch(`${API_URL}/safety-replies?trigger_type=${triggerType}&risk_level=${riskLevel}`)
+                if (safetyResponse.ok) {
+                  const safetyData = await safetyResponse.json()
+                  setSafetyReplies(safetyData.safety_replies || [])
+                }
+              } catch (err) {
+                console.error('Failed to fetch safety replies:', err)
+              }
+            }
           }
         } catch (err) {
           console.error('Failed to fetch timeline:', err)
@@ -464,6 +494,13 @@ Please send me $500 right now via crypto!`
                 )}
               </CardContent>
             </Card>
+
+            {safetyReplies.length > 0 && (
+              <SafetyReplyCard 
+                replies={safetyReplies} 
+                triggerType={safetyReplies[0]?.trigger_type || 'general'} 
+              />
+            )}
 
             {report.photo_analysis && (
               <Card className="bg-white/95 border-[#E6B7BE] border-2 rounded-xl shadow-lg">
