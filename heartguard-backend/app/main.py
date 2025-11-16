@@ -999,6 +999,7 @@ async def generate_trust_score(
     
     if conversation:
         from app.models.database import TrustedContact, AlertLog
+        from datetime import timedelta
         
         contacts = db.query(TrustedContact).filter(
             TrustedContact.user_identifier == conversation.id,
@@ -1006,9 +1007,33 @@ async def generate_trust_score(
         ).all()
         
         if contacts:
+            financial_patterns = []
+            if chat_analysis and chat_analysis.manipulation_patterns:
+                financial_patterns = [
+                    p for p in chat_analysis.manipulation_patterns 
+                    if p.pattern_type in ["Financial Request", "Cryptocurrency Request", "Gift Card Request"]
+                ]
+            
             for contact in contacts:
                 threshold = contact.alert_threshold or 40
-                if trust_score < threshold:
+                should_alert = False
+                alert_reason = ""
+                
+                if financial_patterns:
+                    should_alert = True
+                    alert_reason = f"Financial manipulation detected: {', '.join([p.pattern_type for p in financial_patterns])}"
+                elif trust_score < threshold:
+                    should_alert = True
+                    alert_reason = f"Trust score {trust_score} below threshold {threshold}"
+                
+                if should_alert:
+                    cooldown_minutes = 60
+                    if contact.last_alert_timestamp:
+                        time_since_last = datetime.utcnow() - contact.last_alert_timestamp
+                        if time_since_last < timedelta(minutes=cooldown_minutes):
+                            print(f"⏱️ Cooldown active for {contact.contact_name} ({int((timedelta(minutes=cooldown_minutes) - time_since_last).total_seconds() / 60)} min remaining)")
+                            continue
+                    
                     alert_log = AlertLog(
                         contact_id=contact.id,
                         user_identifier=conversation.id,
@@ -1016,14 +1041,14 @@ async def generate_trust_score(
                         trust_score=trust_score,
                         threshold=threshold,
                         channel='EMAIL' if contact.contact_email else 'SMS' if contact.contact_phone else 'N/A',
-                        reason=f"Trust score {trust_score} below threshold {threshold}",
+                        reason=alert_reason,
                         status='LOGGED'
                     )
                     db.add(alert_log)
                     
                     contact.last_alert_timestamp = datetime.utcnow()
                     
-                    print(f"⚠️ Guardian Mode Alert: Trust score {trust_score} below threshold {threshold} for conversation {conversation.id}")
+                    print(f"⚠️ Guardian Mode Alert: {alert_reason} for conversation {conversation.id}")
                     print(f"📧 Logged alert for {contact.contact_name} ({contact.contact_email or contact.contact_phone})")
             
             db.commit()
@@ -1417,24 +1442,24 @@ async def get_safety_replies(
     }
 
 
+class TrustedContactInput(BaseModel):
+    user_identifier: str
+    contact_name: str
+    contact_email: str
+    contact_phone: Optional[str] = None
+    alert_threshold: Optional[int] = 40
+    escalation_order: Optional[int] = 1
+
 @app.post("/guardian/contact/add")
 async def add_trusted_contact(
-    user_identifier: str = Form(...),
-    contact_name: str = Form(...),
-    contact_email: str = Form(...),
-    contact_phone: Optional[str] = Form(None),
-    alert_threshold: Optional[int] = Form(40),
+    contact: TrustedContactInput,
     db: Session = Depends(get_db)
 ):
     """
     Add a trusted contact for Guardian Mode alerts.
     
     Args:
-        user_identifier: User ID or conversation ID
-        contact_name: Name of the trusted contact
-        contact_email: Email address for alerts (primary)
-        contact_phone: Phone number for alerts (optional, secondary)
-        alert_threshold: Trust score threshold that triggers alerts (default 40)
+        contact: Trusted contact details (JSON body)
         db: Database session
         
     Returns:
@@ -1443,12 +1468,12 @@ async def add_trusted_contact(
     from app.models.database import TrustedContact
     
     trusted_contact = TrustedContact(
-        user_identifier=user_identifier,
-        contact_name=contact_name,
-        contact_email=contact_email,
-        contact_phone=contact_phone,
-        contact_email_or_phone=contact_email,
-        alert_threshold=alert_threshold or 40,
+        user_identifier=contact.user_identifier,
+        contact_name=contact.contact_name,
+        contact_email=contact.contact_email,
+        contact_phone=contact.contact_phone,
+        contact_email_or_phone=contact.contact_email,
+        alert_threshold=contact.alert_threshold or 40,
         is_active=True
     )
     
@@ -1505,6 +1530,76 @@ async def get_trusted_contacts(
             }
             for contact in contacts
         ]
+    }
+
+@app.delete("/guardian/contact/{contact_id}")
+async def delete_trusted_contact(
+    contact_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Delete (deactivate) a trusted contact.
+    
+    Args:
+        contact_id: Contact ID to delete
+        db: Database session
+        
+    Returns:
+        Success message
+    """
+    from app.models.database import TrustedContact
+    
+    contact = db.query(TrustedContact).filter(TrustedContact.id == contact_id).first()
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    
+    contact.is_active = False
+    db.commit()
+    
+    return {"success": True, "message": "Contact deactivated"}
+
+@app.get("/guardian/alerts/{user_identifier}")
+async def get_alert_history(
+    user_identifier: str,
+    limit: Optional[int] = 50,
+    db: Session = Depends(get_db)
+):
+    """
+    Get alert history for a user.
+    
+    Args:
+        user_identifier: User ID or conversation ID
+        limit: Maximum number of alerts to return (default 50)
+        db: Database session
+        
+    Returns:
+        List of alert log entries
+    """
+    from app.models.database import AlertLog, TrustedContact
+    
+    alerts = db.query(AlertLog).filter(
+        AlertLog.user_identifier == user_identifier
+    ).order_by(AlertLog.created_at.desc()).limit(limit).all()
+    
+    result = []
+    for alert in alerts:
+        contact = db.query(TrustedContact).filter(TrustedContact.id == alert.contact_id).first()
+        result.append({
+            "id": alert.id,
+            "contact_name": contact.contact_name if contact else "Unknown",
+            "contact_email": contact.contact_email if contact else None,
+            "trust_score": alert.trust_score,
+            "threshold": alert.threshold,
+            "channel": alert.channel,
+            "reason": alert.reason,
+            "status": alert.status,
+            "created_at": alert.created_at.isoformat() + "Z"
+        })
+    
+    return {
+        "user_identifier": user_identifier,
+        "alerts": result,
+        "total": len(result)
     }
 
 @app.get("/ip/intel", response_model=IPIntelligenceResponse)
