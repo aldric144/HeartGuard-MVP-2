@@ -27,10 +27,34 @@ from app.models.database import (
     populate_geographic_risks
 )
 from app.toneshift_engine import toneshift_engine
+import re
 
 load_dotenv()
 
 app = FastAPI()
+
+def normalize_phone_number(phone_input: str) -> str:
+    """Normalize phone number to standard format for matching.
+    Handles formats like: +234-123-456, +1 (876) 555-1234, 1-876-555-1234, etc.
+    Returns normalized format: +XXX or +1-XXX for NANPA codes."""
+    if not phone_input:
+        return ""
+    
+    cleaned = re.sub(r'[^\d+\-]', '', phone_input.strip())
+    
+    if not cleaned.startswith('+'):
+        if cleaned.startswith('1') and len(cleaned) >= 4:
+            cleaned = '+' + cleaned
+        else:
+            cleaned = '+' + cleaned
+    
+    if cleaned.startswith('+1'):
+        digits = re.sub(r'[^\d]', '', cleaned[2:])
+        if len(digits) >= 3:
+            area_code = digits[:3]
+            return f"+1-{area_code}"
+    
+    return cleaned
 
 # Disable CORS. Do not remove this for full-stack development.
 app.add_middleware(
@@ -526,12 +550,15 @@ async def analyze_metadata(
     is_known_scam_origin = False
     
     if phone_number:
-        phone_input = phone_number.strip()
+        normalized_phone = normalize_phone_number(phone_number)
+        all_risks = db.query(GeographicRisk).all()
+        all_risks_sorted = sorted(all_risks, key=lambda r: len(r.code), reverse=True)
+        
         matched_risk = None
-        for risk in db.query(GeographicRisk).all():
-            if phone_input.startswith(risk.code):
-                if matched_risk is None or len(risk.code) > len(matched_risk.code):
-                    matched_risk = risk
+        for risk in all_risks_sorted:
+            if normalized_phone.startswith(risk.code):
+                matched_risk = risk
+                break
         
         if matched_risk:
             risk_score_map = {
@@ -944,13 +971,16 @@ async def get_pattern_analytics(db: Session = Depends(get_db)):
 
 @app.get("/analyze/location/{phone_number_or_code}", response_model=LocationRiskResponse)
 async def analyze_location(phone_number_or_code: str, db: Session = Depends(get_db)):
-    phone_input = phone_number_or_code.strip()
+    normalized_phone = normalize_phone_number(phone_number_or_code)
+    
+    all_risks = db.query(GeographicRisk).all()
+    all_risks_sorted = sorted(all_risks, key=lambda r: len(r.code), reverse=True)
     
     matched_risk = None
-    for risk in db.query(GeographicRisk).all():
-        if phone_input.startswith(risk.code):
-            if matched_risk is None or len(risk.code) > len(matched_risk.code):
-                matched_risk = risk
+    for risk in all_risks_sorted:
+        if normalized_phone.startswith(risk.code):
+            matched_risk = risk
+            break
     
     if matched_risk:
         risk_score_map = {

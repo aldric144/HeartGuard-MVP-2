@@ -113,6 +113,9 @@ class GeographicRisk(Base):
     code = Column(String, unique=True, index=True)
     region = Column(String)
     risk_level = Column(String)
+    scam_types = Column(JSON, nullable=True)
+    notes = Column(Text, nullable=True)
+    category = Column(String, nullable=True)
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./heartguard.db")
 
@@ -130,61 +133,394 @@ def init_db():
     Base.metadata.create_all(bind=engine)
 
 def populate_geographic_risks():
+    """Populate GeographicRisk table with comprehensive global romance fraud hotspot data.
+    Uses upsert logic to allow safe updates and expansions."""
     db = SessionLocal()
     
-    if db.query(GeographicRisk).count() > 0:
-        db.close()
-        return
-    
     risk_data = [
-        ("+234", "Nigeria", "Extreme"),
-        ("+233", "Ghana", "Extreme"),
-        ("+225", "Ivory Coast", "Extreme"),
-        ("+254", "Kenya", "Extreme"),
-        ("+27", "South Africa", "High"),
-        ("+60", "Malaysia", "Extreme"),
-        ("+63", "Philippines", "Extreme"),
-        ("+84", "Vietnam", "High"),
-        ("+62", "Indonesia", "High"),
-        ("+66", "Thailand", "High"),
-        ("+91", "India", "High"),
-        ("+92", "Pakistan", "High"),
-        ("+880", "Bangladesh", "High"),
-        ("+380", "Ukraine", "High"),
-        ("+7", "Russia", "High"),
-        ("+40", "Romania", "High"),
-        ("+90", "Turkey", "Medium"),
-        ("+20", "Egypt", "Medium"),
-        ("+212", "Morocco", "Medium"),
-        ("+55", "Brazil", "Medium"),
-        ("+52", "Mexico", "Medium"),
-        ("+57", "Colombia", "Medium"),
-        ("+1-876", "Jamaica (Caribbean)", "Extreme"),
-        ("+1-868", "Trinidad & Tobago (Caribbean)", "High"),
-        ("+1-246", "Barbados (Caribbean)", "High"),
-        ("+1-473", "Grenada (Caribbean)", "High"),
-        ("+1-758", "St. Lucia (Caribbean)", "High"),
-        ("+1-784", "St. Vincent (Caribbean)", "High"),
-        ("+1-809", "Dominican Republic (Caribbean)", "High"),
-        ("+1-829", "Dominican Republic (Caribbean)", "High"),
-        ("+1-849", "Dominican Republic (Caribbean)", "High"),
-        ("+1-242", "Bahamas (Caribbean)", "Medium"),
-        ("+1-264", "Anguilla (Caribbean)", "Medium"),
-        ("+1-268", "Antigua (Caribbean)", "Medium"),
-        ("+1-345", "Cayman Islands (Caribbean)", "Medium"),
-        ("+1-664", "Montserrat (Caribbean)", "Medium"),
-        ("+1-721", "Sint Maarten (Caribbean)", "Medium"),
-        ("+1-767", "Dominica (Caribbean)", "Medium"),
-        ("+1-939", "Puerto Rico (US Spoofed)", "High"),
-        ("+1-787", "Puerto Rico (US Spoofed)", "High"),
-        ("+1-340", "US Virgin Islands (US Spoofed)", "High"),
-        ("+1-670", "Northern Mariana Islands (US Spoofed)", "Medium"),
-        ("+1-671", "Guam (US Spoofed)", "Medium"),
+        {
+            "code": "+234", "region": "Nigeria", "risk_level": "Extreme", "category": "country",
+            "scam_types": ["Romance scams", "419 scams", "Catfishing", "Crypto scams", "Investment fraud", "Impersonation fraud"],
+            "notes": "Most infamous romance scam region. Large organized cyber-fraud rings in Lagos, Benin City, Abuja. Extremely high volume internet fraud operations."
+        },
+        {
+            "code": "+233", "region": "Ghana", "risk_level": "Extreme", "category": "country",
+            "scam_types": ["Romance manipulation", "Identity fraud", "Fake soldier scams", "Crypto-investment lures"],
+            "notes": "Second-largest West African romance-scam hub. Major scammer networks in Accra, Kumasi, Tema."
+        },
+        {
+            "code": "+225", "region": "Ivory Coast", "risk_level": "Extreme", "category": "country",
+            "scam_types": ["Romance scams", "Facebook lover fraud", "Military romance impersonations", "Money requests"],
+            "notes": "Known for romance scams and military impersonation fraud."
+        },
+        {
+            "code": "+254", "region": "Kenya", "risk_level": "Extreme", "category": "country",
+            "scam_types": ["Online dating fraud", "Mobile money scams", "Romance scams"],
+            "notes": "Used for online dating fraud and romance scams on Facebook, TikTok, Instagram."
+        },
+        
+        {
+            "code": "+27", "region": "South Africa", "risk_level": "High", "category": "country",
+            "scam_types": ["Fake sugar-mama/daddy scams", "Investment scams", "Romance scams", "Fake mining/inheritance scams"],
+            "notes": "Used for fake sugar-mama/daddy scams and investment fraud."
+        },
+        {
+            "code": "+228", "region": "Togo", "risk_level": "High", "category": "country",
+            "scam_types": ["Romance scams", "Fake U.N. worker scams", "Fake doctor/military scams"],
+            "notes": "Small but active scam region. Scammers often pose as U.N. workers, doctors, or military."
+        },
+        {
+            "code": "+229", "region": "Benin", "risk_level": "High", "category": "country",
+            "scam_types": ["Fake inheritance scams", "Romance scams", "Emergency money scams"],
+            "notes": "Used often for fake inheritance and romance emergency money scams."
+        },
+        {
+            "code": "+237", "region": "Cameroon", "risk_level": "High", "category": "country",
+            "scam_types": ["Romance scams", "Social media manipulation", "Sextortion", "Blackmail"],
+            "notes": "Major hotspot for romance, social media manipulation, and blackmail/sextortion."
+        },
+        
+        {
+            "code": "+63", "region": "Philippines", "risk_level": "Extreme", "category": "country",
+            "scam_types": ["Romance scams", "Crypto investment scams", "Fake-model identity scams"],
+            "notes": "Used for romance scams, crypto investment scams, and fake-model identity fraud."
+        },
+        {
+            "code": "+60", "region": "Malaysia", "risk_level": "Extreme", "category": "country",
+            "scam_types": ["Romance-lure investment fraud", "WhatsApp emergency scams"],
+            "notes": "Used for romance-lure investment fraud and WhatsApp emergency scams."
+        },
+        
+        {
+            "code": "+66", "region": "Thailand", "risk_level": "High", "category": "country",
+            "scam_types": ["Pig-butchering scams", "Romance-investment scams", "Crypto scams"],
+            "notes": "Heavily linked to pig-butchering romance-investment scams, especially by Chinese crime syndicates operating in SE Asia."
+        },
+        {
+            "code": "+84", "region": "Vietnam", "risk_level": "High", "category": "country",
+            "scam_types": ["Romance scams", "Investment fraud"],
+            "notes": "Used for romance and investment fraud operations."
+        },
+        {
+            "code": "+62", "region": "Indonesia", "risk_level": "High", "category": "country",
+            "scam_types": ["Romance scams", "Investment fraud"],
+            "notes": "Active in romance and investment fraud."
+        },
+        {
+            "code": "+91", "region": "India", "risk_level": "High", "category": "country",
+            "scam_types": ["Romance scams", "Tech support scams", "Loan scams", "Investment scams"],
+            "notes": "Large call-center based fraud groups running romance, tech support, loan, and investment scams."
+        },
+        {
+            "code": "+92", "region": "Pakistan", "risk_level": "High", "category": "country",
+            "scam_types": ["Romance manipulation", "Blackmail", "Identity theft"],
+            "notes": "Used for romance manipulation, blackmail, and identity theft."
+        },
+        {
+            "code": "+880", "region": "Bangladesh", "risk_level": "High", "category": "country",
+            "scam_types": ["Romance scams", "Investment fraud"],
+            "notes": "Active in romance and investment fraud operations."
+        },
+        {
+            "code": "+86", "region": "China", "risk_level": "High", "category": "country",
+            "scam_types": ["Crypto investment scams", "Pig butchering scams"],
+            "notes": "Not usually romance scams, but heavily used for crypto investment and pig-butchering scams. Often scammers operate from Cambodia, Myanmar, Laos, Thailand but use Chinese VPNs."
+        },
+        {
+            "code": "+852", "region": "Hong Kong", "risk_level": "High", "category": "country",
+            "scam_types": ["Investment scams", "Romance-investment hybrids", "Crypto platform scams"],
+            "notes": "Used for investment and romance-investment hybrid scams, crypto platform fraud."
+        },
+        {
+            "code": "+855", "region": "Cambodia", "risk_level": "High", "category": "country",
+            "scam_types": ["Pig-butchering scams", "Romance-investment scams"],
+            "notes": "Major pig-butchering scam compound centers."
+        },
+        {
+            "code": "+856", "region": "Laos", "risk_level": "High", "category": "country",
+            "scam_types": ["Pig-butchering scams", "Romance-investment scams"],
+            "notes": "Scam compound centers for pig-butchering operations."
+        },
+        {
+            "code": "+95", "region": "Myanmar", "risk_level": "High", "category": "country",
+            "scam_types": ["Pig-butchering scams", "Romance-investment scams"],
+            "notes": "Scam compound centers for pig-butchering operations."
+        },
+        
+        {
+            "code": "+380", "region": "Ukraine", "risk_level": "High", "category": "country",
+            "scam_types": ["Fake dating sites", "Romance gift-card fraud", "Translator fee scams"],
+            "notes": "Legitimate dating market exists, but also fake dating sites, romance gift-card fraud, and translator fee scams."
+        },
+        {
+            "code": "+7", "region": "Russia", "risk_level": "High", "category": "country",
+            "scam_types": ["Romance fraud", "Fake soldier scams", "Model/dating-site scams"],
+            "notes": "Used in romance fraud, fake soldier scams, and model/dating-site scams."
+        },
+        {
+            "code": "+40", "region": "Romania", "risk_level": "High", "category": "country",
+            "scam_types": ["Romance fraud", "Sextortion", "Blackmail scams"],
+            "notes": "Major base for romance fraud, sextortion, and blackmail scams."
+        },
+        {
+            "code": "+371", "region": "Latvia", "risk_level": "High", "category": "country",
+            "scam_types": ["Fake dating-site operators", "Fake escort romance scams"],
+            "notes": "Known globally for fake dating-site operators and fake escort romance scams."
+        },
+        
+        {
+            "code": "+90", "region": "Turkey", "risk_level": "Medium", "category": "country",
+            "scam_types": ["Romance scams", "Emergency payment scams", "Stuck at airport fraud"],
+            "notes": "Used for romance and emergency payment scams, including stuck at airport romance fraud."
+        },
+        {
+            "code": "+971", "region": "UAE/Dubai", "risk_level": "High", "category": "country",
+            "scam_types": ["Fake investor/entrepreneur romance scams", "Crypto romance scams"],
+            "notes": "Used for fake investor/entrepreneur romance scams and crypto romance scams."
+        },
+        {
+            "code": "+20", "region": "Egypt", "risk_level": "Medium", "category": "country",
+            "scam_types": ["Romance scams", "Investment fraud"],
+            "notes": "Active in romance and investment fraud."
+        },
+        {
+            "code": "+212", "region": "Morocco", "risk_level": "Medium", "category": "country",
+            "scam_types": ["Romance scams", "Investment fraud"],
+            "notes": "Used for romance and investment fraud operations."
+        },
+        
+        {
+            "code": "+55", "region": "Brazil", "risk_level": "Medium", "category": "country",
+            "scam_types": ["Romance scams", "Investment fraud"],
+            "notes": "Active in romance and investment fraud."
+        },
+        {
+            "code": "+52", "region": "Mexico", "risk_level": "Medium", "category": "country",
+            "scam_types": ["Romance scams", "Investment fraud"],
+            "notes": "Used for romance and investment fraud operations."
+        },
+        {
+            "code": "+57", "region": "Colombia", "risk_level": "Medium", "category": "country",
+            "scam_types": ["Romance scams", "Investment fraud"],
+            "notes": "Active in romance and investment fraud."
+        },
+        
+        {
+            "code": "+1-876", "region": "Jamaica", "risk_level": "Extreme", "category": "caribbean",
+            "scam_types": ["Romance call-backs", "One-ring scams", "Money requests", "Stranded scams"],
+            "notes": "Highest-risk Caribbean code. Heavy romance and phone scam activity."
+        },
+        {
+            "code": "+1-658", "region": "Jamaica (overlay)", "risk_level": "Extreme", "category": "caribbean",
+            "scam_types": ["Romance call-backs", "One-ring scams", "Money requests"],
+            "notes": "Jamaica overlay code with high scam activity."
+        },
+        {
+            "code": "+1-473", "region": "Grenada", "risk_level": "High", "category": "caribbean",
+            "scam_types": ["Romance call-backs", "One-ring scams", "Money requests"],
+            "notes": "High-risk Caribbean scam code."
+        },
+        {
+            "code": "+1-809", "region": "Dominican Republic", "risk_level": "High", "category": "caribbean",
+            "scam_types": ["Romance call-backs", "One-ring scams", "Money requests"],
+            "notes": "Dominican Republic primary code with high scam volume."
+        },
+        {
+            "code": "+1-829", "region": "Dominican Republic", "risk_level": "High", "category": "caribbean",
+            "scam_types": ["Romance call-backs", "One-ring scams", "Money requests"],
+            "notes": "Dominican Republic overlay code with high scam activity."
+        },
+        {
+            "code": "+1-849", "region": "Dominican Republic", "risk_level": "High", "category": "caribbean",
+            "scam_types": ["Romance call-backs", "One-ring scams", "Money requests"],
+            "notes": "Dominican Republic overlay code with high scam activity."
+        },
+        {
+            "code": "+1-868", "region": "Trinidad & Tobago", "risk_level": "High", "category": "caribbean",
+            "scam_types": ["Romance call-backs", "One-ring scams", "Money requests"],
+            "notes": "High-risk Caribbean code."
+        },
+        {
+            "code": "+1-246", "region": "Barbados", "risk_level": "High", "category": "caribbean",
+            "scam_types": ["Romance call-backs", "One-ring scams"],
+            "notes": "High-risk Caribbean code."
+        },
+        {
+            "code": "+1-758", "region": "St. Lucia", "risk_level": "High", "category": "caribbean",
+            "scam_types": ["Romance call-backs", "One-ring scams"],
+            "notes": "High-risk Caribbean code."
+        },
+        {
+            "code": "+1-784", "region": "St. Vincent", "risk_level": "High", "category": "caribbean",
+            "scam_types": ["Romance call-backs", "One-ring scams"],
+            "notes": "High-risk Caribbean code."
+        },
+        {
+            "code": "+1-284", "region": "British Virgin Islands", "risk_level": "High", "category": "caribbean",
+            "scam_types": ["Romance call-backs", "One-ring scams"],
+            "notes": "High-risk Caribbean code."
+        },
+        {
+            "code": "+1-242", "region": "Bahamas", "risk_level": "Medium", "category": "caribbean",
+            "scam_types": ["Romance call-backs", "One-ring scams"],
+            "notes": "Medium-risk Caribbean code."
+        },
+        {
+            "code": "+1-264", "region": "Anguilla", "risk_level": "Medium", "category": "caribbean",
+            "scam_types": ["Romance call-backs", "One-ring scams"],
+            "notes": "Medium-risk Caribbean code."
+        },
+        {
+            "code": "+1-268", "region": "Antigua & Barbuda", "risk_level": "Medium", "category": "caribbean",
+            "scam_types": ["Romance call-backs", "One-ring scams"],
+            "notes": "Medium-risk Caribbean code."
+        },
+        {
+            "code": "+1-345", "region": "Cayman Islands", "risk_level": "Medium", "category": "caribbean",
+            "scam_types": ["Romance call-backs", "One-ring scams"],
+            "notes": "Medium-risk Caribbean code."
+        },
+        {
+            "code": "+1-664", "region": "Montserrat", "risk_level": "Medium", "category": "caribbean",
+            "scam_types": ["Romance call-backs", "One-ring scams"],
+            "notes": "Medium-risk Caribbean code."
+        },
+        {
+            "code": "+1-721", "region": "Sint Maarten", "risk_level": "Medium", "category": "caribbean",
+            "scam_types": ["Romance call-backs", "One-ring scams"],
+            "notes": "Medium-risk Caribbean code."
+        },
+        {
+            "code": "+1-767", "region": "Dominica", "risk_level": "Medium", "category": "caribbean",
+            "scam_types": ["Romance call-backs", "One-ring scams"],
+            "notes": "Medium-risk Caribbean code."
+        },
+        {
+            "code": "+1-649", "region": "Turks & Caicos", "risk_level": "Medium", "category": "caribbean",
+            "scam_types": ["Romance call-backs", "One-ring scams"],
+            "notes": "Medium-risk Caribbean code."
+        },
+        {
+            "code": "+1-441", "region": "Bermuda", "risk_level": "Medium", "category": "caribbean",
+            "scam_types": ["Romance call-backs", "One-ring scams"],
+            "notes": "Medium-risk Caribbean code."
+        },
+        
+        {
+            "code": "+1-787", "region": "Puerto Rico", "risk_level": "High", "category": "us_territory",
+            "scam_types": ["Spoofing scams", "Romance call-backs"],
+            "notes": "Puerto Rico code used in spoofing scams."
+        },
+        {
+            "code": "+1-939", "region": "Puerto Rico", "risk_level": "High", "category": "us_territory",
+            "scam_types": ["Spoofing scams", "Romance call-backs"],
+            "notes": "Puerto Rico overlay code used in spoofing scams."
+        },
+        {
+            "code": "+1-340", "region": "US Virgin Islands", "risk_level": "High", "category": "us_territory",
+            "scam_types": ["Spoofing scams", "Romance call-backs"],
+            "notes": "US Virgin Islands code used in spoofing scams."
+        },
+        {
+            "code": "+1-670", "region": "Northern Mariana Islands", "risk_level": "Medium", "category": "us_territory",
+            "scam_types": ["Spoofing scams"],
+            "notes": "Northern Mariana Islands code sometimes used in spoofing."
+        },
+        {
+            "code": "+1-671", "region": "Guam", "risk_level": "Medium", "category": "us_territory",
+            "scam_types": ["Spoofing scams"],
+            "notes": "Guam code sometimes used in spoofing."
+        },
+        
+        {
+            "code": "+1-216", "region": "Ohio", "risk_level": "Medium", "category": "us_spoofed",
+            "scam_types": ["VOIP spoofing", "Romance scams"],
+            "notes": "High scam/spam activity. Often spoofed by scammers abroad using VOIP."
+        },
+        {
+            "code": "+1-218", "region": "Minnesota", "risk_level": "Medium", "category": "us_spoofed",
+            "scam_types": ["VOIP spoofing", "Romance scams"],
+            "notes": "High scam/spam activity. Often spoofed."
+        },
+        {
+            "code": "+1-332", "region": "New York", "risk_level": "Medium", "category": "us_spoofed",
+            "scam_types": ["VOIP spoofing", "Romance scams"],
+            "notes": "New York overlay code with high scam activity."
+        },
+        {
+            "code": "+1-347", "region": "New York", "risk_level": "Medium", "category": "us_spoofed",
+            "scam_types": ["VOIP spoofing", "Romance scams"],
+            "notes": "New York overlay code with high scam activity."
+        },
+        {
+            "code": "+1-646", "region": "New York", "risk_level": "Medium", "category": "us_spoofed",
+            "scam_types": ["VOIP spoofing", "Romance scams"],
+            "notes": "New York overlay code with high scam activity."
+        },
+        {
+            "code": "+1-657", "region": "California", "risk_level": "Medium", "category": "us_spoofed",
+            "scam_types": ["VOIP spoofing", "Romance scams"],
+            "notes": "California overlay code with high scam activity."
+        },
+        {
+            "code": "+1-712", "region": "Iowa", "risk_level": "Medium", "category": "us_spoofed",
+            "scam_types": ["VOIP spoofing", "Conference call scams"],
+            "notes": "Iowa code with high scam/spam activity."
+        },
+        {
+            "code": "+1-725", "region": "Las Vegas, Nevada", "risk_level": "Medium", "category": "us_spoofed",
+            "scam_types": ["VOIP spoofing", "Romance scams"],
+            "notes": "Las Vegas overlay code with high scam activity."
+        },
+        {
+            "code": "+1-702", "region": "Las Vegas, Nevada", "risk_level": "Medium", "category": "us_spoofed",
+            "scam_types": ["VOIP spoofing", "Romance scams"],
+            "notes": "Las Vegas primary code with high scam activity."
+        },
+        {
+            "code": "+1-770", "region": "Georgia", "risk_level": "Medium", "category": "us_spoofed",
+            "scam_types": ["VOIP spoofing", "Romance scams"],
+            "notes": "Georgia overlay code with high scam activity."
+        },
+        {
+            "code": "+1-678", "region": "Georgia", "risk_level": "Medium", "category": "us_spoofed",
+            "scam_types": ["VOIP spoofing", "Romance scams"],
+            "notes": "Georgia overlay code with high scam activity."
+        },
+        
+        {
+            "code": "+1-807", "region": "Ontario, Canada", "risk_level": "Medium", "category": "canada",
+            "scam_types": ["VOIP spoofing", "Romance scams"],
+            "notes": "Ontario code linked to high scam volume, often spoofed."
+        },
+        {
+            "code": "+1-867", "region": "Northern Canada", "risk_level": "Medium", "category": "canada",
+            "scam_types": ["VOIP spoofing", "Romance scams"],
+            "notes": "Northern Canada code linked to scam activity."
+        },
+        {
+            "code": "+1-778", "region": "British Columbia, Canada", "risk_level": "Medium", "category": "canada",
+            "scam_types": ["VOIP spoofing", "Romance scams"],
+            "notes": "British Columbia overlay code with scam activity."
+        },
+        {
+            "code": "+1-604", "region": "British Columbia, Canada", "risk_level": "Medium", "category": "canada",
+            "scam_types": ["VOIP spoofing", "Romance scams"],
+            "notes": "British Columbia primary code with scam activity."
+        },
     ]
     
-    for code, region, risk_level in risk_data:
-        risk = GeographicRisk(code=code, region=region, risk_level=risk_level)
-        db.add(risk)
+    for entry in risk_data:
+        existing = db.query(GeographicRisk).filter(GeographicRisk.code == entry["code"]).first()
+        if existing:
+            existing.region = entry["region"]
+            existing.risk_level = entry["risk_level"]
+            existing.scam_types = entry.get("scam_types")
+            existing.notes = entry.get("notes")
+            existing.category = entry.get("category")
+        else:
+            risk = GeographicRisk(**entry)
+            db.add(risk)
     
     db.commit()
     db.close()
