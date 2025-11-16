@@ -55,8 +55,17 @@ export function ScamHotspotMap() {
   const [focusedRegion, setFocusedRegion] = useState<RegionData | null>(null)
   const [animatedCounters, setAnimatedCounters] = useState({ extreme: 0, high: 0, total: 0 })
   const [showResult, setShowResult] = useState(false)
+  const [tourActive, setTourActive] = useState(false)
+  const [mapVisible, setMapVisible] = useState(false)
+  const [flippedCards, setFlippedCards] = useState<{[key: string]: boolean}>({
+    extreme: false,
+    high: false,
+    total: false
+  })
 
   useEffect(() => {
+    setMapVisible(true)
+    
     const extremeCount = HOTSPOT_REGIONS.filter(r => r.risk_level === 'Extreme').length
     const highCount = HOTSPOT_REGIONS.reduce((acc, r) => acc + r.codes.length, 0)
     const totalCount = HOTSPOT_REGIONS.length
@@ -77,8 +86,33 @@ export function ScamHotspotMap() {
       if (step >= steps) clearInterval(timer)
     }, interval)
 
+    setTimeout(() => startMapTour(), 800)
+
     return () => clearInterval(timer)
   }, [])
+
+  const startMapTour = () => {
+    setTourActive(true)
+    const tourRegions = [
+      HOTSPOT_REGIONS.find(r => r.name === 'West Africa'),
+      HOTSPOT_REGIONS.find(r => r.name === 'Caribbean'),
+      HOTSPOT_REGIONS.find(r => r.name === 'Southeast Asia'),
+      HOTSPOT_REGIONS.find(r => r.name === 'East Asia')
+    ].filter(Boolean) as RegionData[]
+
+    let currentIndex = 0
+    const tourInterval = setInterval(() => {
+      if (currentIndex < tourRegions.length) {
+        setFocusedRegion(tourRegions[currentIndex])
+        setSelectedRegion(tourRegions[currentIndex])
+        currentIndex++
+      } else {
+        clearInterval(tourInterval)
+        setFocusedRegion(null)
+        setTourActive(false)
+      }
+    }, 2000)
+  }
 
   const checkPhoneNumber = async (codeToCheck?: string) => {
     const code = codeToCheck || phoneNumber
@@ -133,6 +167,10 @@ export function ScamHotspotMap() {
     }
   }
 
+  const toggleCard = (cardKey: string) => {
+    setFlippedCards(prev => ({ ...prev, [cardKey]: !prev[cardKey] }))
+  }
+
   return (
     <div className="space-y-6">
       {/* Main Card with Map and Checker Side by Side */}
@@ -150,12 +188,12 @@ export function ScamHotspotMap() {
           <div className="grid md:grid-cols-2 gap-6">
             {/* Left: Interactive World Map */}
             <div>
-              <div className="relative bg-gradient-to-br from-[#F6EAF1] to-[#E6B7BE]/20 rounded-xl p-4 mb-3 shadow-inner">
+              <div className="relative bg-gradient-to-br from-[#F6EAF1] to-[#E6B7BE]/20 rounded-xl p-4 mb-3 shadow-inner overflow-hidden">
                 <svg 
                   viewBox="0 0 100 70" 
-                  className="w-full h-auto transition-transform duration-700 ease-out"
+                  className={`w-full h-auto transition-all duration-1000 ease-out ${mapVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}
                   style={{
-                    transform: focusedRegion ? `scale(1.15) translate(${(50 - focusedRegion.position.x) * 0.3}px, ${(35 - focusedRegion.position.y) * 0.3}px)` : 'scale(1)'
+                    transform: focusedRegion ? `scale(1.4) translate(${(50 - focusedRegion.position.x) * 0.5}px, ${(35 - focusedRegion.position.y) * 0.5}px)` : 'scale(1)'
                   }}
                 >
                   <defs>
@@ -174,69 +212,99 @@ export function ScamHotspotMap() {
                   
                   <rect x="0" y="0" width="100" height="70" fill="#F6EAF1" opacity="0.6" />
                   
-                  <path d="M 8 30 L 12 25 L 18 22 L 24 24 L 28 28 L 30 35 L 28 42 L 24 48 L 20 50 L 15 48 L 12 45 L 10 40 L 8 35 Z" fill="#9AA5B1" stroke="#334155" strokeWidth="0.4" opacity="0.85" />
-                  <path d="M 24 52 L 28 50 L 32 52 L 34 58 L 32 65 L 28 68 L 24 66 L 22 60 L 23 54 Z" fill="#9AA5B1" stroke="#334155" strokeWidth="0.4" opacity="0.85" />
-                  <path d="M 45 28 L 50 25 L 56 26 L 60 30 L 58 35 L 54 38 L 48 36 L 45 32 Z" fill="#9AA5B1" stroke="#334155" strokeWidth="0.4" opacity="0.85" />
-                  <path d="M 46 40 L 50 38 L 56 40 L 58 45 L 58 52 L 56 60 L 52 66 L 48 64 L 46 58 L 44 50 L 45 44 Z" fill="#9AA5B1" stroke="#334155" strokeWidth="0.4" opacity="0.85" />
-                  <path d="M 62 28 L 68 24 L 75 26 L 82 30 L 88 35 L 90 42 L 88 48 L 82 52 L 76 54 L 70 52 L 65 48 L 62 42 L 60 35 Z" fill="#9AA5B1" stroke="#334155" strokeWidth="0.4" opacity="0.85" />
-                  <path d="M 78 58 L 84 56 L 88 58 L 90 62 L 88 66 L 82 68 L 78 66 L 76 62 Z" fill="#9AA5B1" stroke="#334155" strokeWidth="0.4" opacity="0.85" />
+                  <g className={`transition-all duration-1000 ${mapVisible ? 'opacity-100' : 'opacity-0'}`} style={{ transitionDelay: '200ms' }}>
+                    <path d="M 8 30 L 12 25 L 18 22 L 24 24 L 28 28 L 30 35 L 28 42 L 24 48 L 20 50 L 15 48 L 12 45 L 10 40 L 8 35 Z" fill="#9AA5B1" stroke="#334155" strokeWidth="0.4" opacity="0.85" />
+                    <path d="M 24 52 L 28 50 L 32 52 L 34 58 L 32 65 L 28 68 L 24 66 L 22 60 L 23 54 Z" fill="#9AA5B1" stroke="#334155" strokeWidth="0.4" opacity="0.85" />
+                    <path d="M 45 28 L 50 25 L 56 26 L 60 30 L 58 35 L 54 38 L 48 36 L 45 32 Z" fill="#9AA5B1" stroke="#334155" strokeWidth="0.4" opacity="0.85" />
+                    <path d="M 46 40 L 50 38 L 56 40 L 58 45 L 58 52 L 56 60 L 52 66 L 48 64 L 46 58 L 44 50 L 45 44 Z" fill="#9AA5B1" stroke="#334155" strokeWidth="0.4" opacity="0.85" />
+                    <path d="M 62 28 L 68 24 L 75 26 L 82 30 L 88 35 L 90 42 L 88 48 L 82 52 L 76 54 L 70 52 L 65 48 L 62 42 L 60 35 Z" fill="#9AA5B1" stroke="#334155" strokeWidth="0.4" opacity="0.85" />
+                    <path d="M 78 58 L 84 56 L 88 58 L 90 62 L 88 66 L 82 68 L 78 66 L 76 62 Z" fill="#9AA5B1" stroke="#334155" strokeWidth="0.4" opacity="0.85" />
+                  </g>
                   
                   {HOTSPOT_REGIONS.map((region, idx) => (
                     <g 
                       key={idx}
-                      onMouseEnter={() => setHoveredRegion(region)}
+                      onMouseEnter={() => !tourActive && setHoveredRegion(region)}
                       onMouseLeave={() => setHoveredRegion(null)}
-                      onClick={() => handleRegionClick(region)}
-                      className="cursor-pointer"
+                      onClick={() => !tourActive && handleRegionClick(region)}
+                      className={`cursor-pointer transition-all duration-500 ${mapVisible ? 'opacity-100' : 'opacity-0'}`}
+                      style={{ transitionDelay: `${400 + idx * 100}ms` }}
                     >
                       {focusedRegion?.name === region.name && (
-                        <circle
-                          cx={region.position.x}
-                          cy={region.position.y}
-                          r="8"
-                          fill="url(#focusGlow)"
-                          className="animate-pulse"
-                        />
+                        <>
+                          <circle
+                            cx={region.position.x}
+                            cy={region.position.y}
+                            r="15"
+                            fill="url(#focusGlow)"
+                            className="animate-pulse"
+                            style={{ animationDuration: '1.5s' }}
+                          />
+                          <circle
+                            cx={region.position.x}
+                            cy={region.position.y}
+                            r="12"
+                            fill="none"
+                            stroke={region.color}
+                            strokeWidth="1"
+                            opacity="0.4"
+                            className="animate-ping"
+                            style={{ animationDuration: '1.2s' }}
+                          />
+                        </>
                       )}
                       <circle
                         cx={region.position.x}
                         cy={region.position.y}
-                        r={hoveredRegion?.name === region.name ? "3" : "2.5"}
+                        r={hoveredRegion?.name === region.name || focusedRegion?.name === region.name ? "3.5" : "2.5"}
                         fill={region.color}
                         opacity="0.95"
-                        filter={hoveredRegion?.name === region.name ? "url(#glow)" : undefined}
-                        className="transition-all duration-300"
+                        filter={(hoveredRegion?.name === region.name || focusedRegion?.name === region.name) ? "url(#glow)" : undefined}
+                        className="transition-all duration-500"
                       />
                       <circle
                         cx={region.position.x}
                         cy={region.position.y}
-                        r="5"
+                        r="7"
                         fill={region.color}
-                        opacity="0.25"
+                        opacity="0.2"
                         className="animate-ping"
-                        style={{ animationDuration: '2.5s' }}
+                        style={{ animationDuration: '3s' }}
                       />
                       {(hoveredRegion?.name === region.name || focusedRegion?.name === region.name) && (
-                        <circle
-                          cx={region.position.x}
-                          cy={region.position.y}
-                          r="6"
-                          fill="none"
-                          stroke={region.color}
-                          strokeWidth="0.5"
-                          opacity="0.6"
-                          className="animate-ping"
-                          style={{ animationDuration: '1s' }}
-                        />
+                        <>
+                          <circle
+                            cx={region.position.x}
+                            cy={region.position.y}
+                            r="9"
+                            fill="none"
+                            stroke={region.color}
+                            strokeWidth="0.8"
+                            opacity="0.5"
+                            className="animate-ping"
+                            style={{ animationDuration: '1.5s' }}
+                          />
+                          <circle
+                            cx={region.position.x}
+                            cy={region.position.y}
+                            r="11"
+                            fill="none"
+                            stroke={region.color}
+                            strokeWidth="0.6"
+                            opacity="0.3"
+                            className="animate-ping"
+                            style={{ animationDuration: '2s' }}
+                          />
+                        </>
                       )}
                       <text
                         x={region.position.x}
-                        y={region.position.y - 4.5}
-                        fontSize={hoveredRegion?.name === region.name ? "2.8" : "2.5"}
+                        y={region.position.y - 5}
+                        fontSize={hoveredRegion?.name === region.name || focusedRegion?.name === region.name ? "3.2" : "2.5"}
                         fill="#0F172A"
                         textAnchor="middle"
-                        className="pointer-events-none font-bold transition-all duration-300"
-                        style={{ textShadow: '0 0 3px white, 0 0 2px white' }}
+                        className="pointer-events-none font-bold transition-all duration-500"
+                        style={{ textShadow: '0 0 4px white, 0 0 3px white, 0 0 2px white' }}
                       >
                         {region.name}
                       </text>
@@ -244,7 +312,21 @@ export function ScamHotspotMap() {
                   ))}
                 </svg>
 
-                {/* Legend */}
+                {tourActive && (
+                  <div className="absolute top-2 right-2 bg-[#5B3256] text-white px-3 py-1.5 rounded-full text-xs font-semibold animate-pulse">
+                    🌍 Map Tour Active
+                  </div>
+                )}
+                
+                {!tourActive && (
+                  <button
+                    onClick={startMapTour}
+                    className="absolute top-2 right-2 bg-[#E6B7BE] hover:bg-[#E6B7BE]/80 text-[#5B3256] px-3 py-1.5 rounded-full text-xs font-semibold transition-all duration-300 hover:scale-105"
+                  >
+                    ▶️ Replay Tour
+                  </button>
+                )}
+
                 <div className="flex flex-wrap gap-3 mt-3 justify-center">
                   <div className="flex items-center gap-1.5">
                     <div className="w-2.5 h-2.5 rounded-full bg-red-600"></div>
@@ -438,26 +520,106 @@ export function ScamHotspotMap() {
         </CardContent>
       </Card>
 
-      {/* Quick Stats with Animated Counters */}
+      {/* Quick Stats with Animated Counters - Flippable Cards */}
       <div className="grid md:grid-cols-3 gap-4">
-        <Card className="bg-gradient-to-br from-red-600 to-red-700 text-white border-0 shadow-lg hover:shadow-xl transition-shadow duration-300">
-          <CardContent className="pt-6">
-            <div className="text-4xl font-bold mb-1 tabular-nums">{animatedCounters.extreme}</div>
-            <div className="text-sm opacity-90">Extreme Risk Regions</div>
-          </CardContent>
-        </Card>
-        <Card className="bg-gradient-to-br from-orange-600 to-orange-700 text-white border-0 shadow-lg hover:shadow-xl transition-shadow duration-300">
-          <CardContent className="pt-6">
-            <div className="text-4xl font-bold mb-1 tabular-nums">{animatedCounters.high}</div>
-            <div className="text-sm opacity-90">High Risk Codes</div>
-          </CardContent>
-        </Card>
-        <Card className="bg-gradient-to-br from-yellow-600 to-yellow-700 text-white border-0 shadow-lg hover:shadow-xl transition-shadow duration-300">
-          <CardContent className="pt-6">
-            <div className="text-4xl font-bold mb-1 tabular-nums">{animatedCounters.total}</div>
-            <div className="text-sm opacity-90">Total Hotspots Monitored</div>
-          </CardContent>
-        </Card>
+        {/* Extreme Risk Card */}
+        <div 
+          className="relative h-32 cursor-pointer group"
+          onClick={() => toggleCard('extreme')}
+          style={{ perspective: '1000px' }}
+        >
+          <div 
+            className={`relative w-full h-full transition-transform duration-700 ${flippedCards.extreme ? '[transform:rotateY(180deg)]' : ''}`}
+            style={{ transformStyle: 'preserve-3d' }}
+          >
+            {/* Front */}
+            <Card className="absolute inset-0 bg-gradient-to-br from-red-600 to-red-700 text-white border-0 shadow-lg group-hover:shadow-2xl transition-shadow duration-300" style={{ backfaceVisibility: 'hidden' }}>
+              <CardContent className="pt-6 flex flex-col items-center justify-center h-full">
+                <div className="text-4xl font-bold mb-1 tabular-nums">{animatedCounters.extreme}</div>
+                <div className="text-sm opacity-90">Extreme Risk Regions</div>
+                <div className="text-xs opacity-70 mt-2">Click to learn more</div>
+              </CardContent>
+            </Card>
+            {/* Back */}
+            <Card className="absolute inset-0 bg-gradient-to-br from-red-700 to-red-800 text-white border-0 shadow-lg" style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>
+              <CardContent className="pt-4 px-4 pb-4 h-full flex flex-col justify-between text-xs">
+                <div>
+                  <div className="font-bold mb-1.5 text-sm">⚠️ Extreme Risk Zones</div>
+                  <p className="leading-tight mb-2">These regions have the highest concentration of romance scam operations. Scammers often use fake profiles claiming to be from these areas.</p>
+                </div>
+                <div className="bg-red-900/50 p-2 rounded text-xs italic">
+                  💡 "If it seems too perfect, verify before you trust."
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        {/* High Risk Codes Card */}
+        <div 
+          className="relative h-32 cursor-pointer group"
+          onClick={() => toggleCard('high')}
+          style={{ perspective: '1000px' }}
+        >
+          <div 
+            className={`relative w-full h-full transition-transform duration-700 ${flippedCards.high ? '[transform:rotateY(180deg)]' : ''}`}
+            style={{ transformStyle: 'preserve-3d' }}
+          >
+            {/* Front */}
+            <Card className="absolute inset-0 bg-gradient-to-br from-orange-600 to-orange-700 text-white border-0 shadow-lg group-hover:shadow-2xl transition-shadow duration-300" style={{ backfaceVisibility: 'hidden' }}>
+              <CardContent className="pt-6 flex flex-col items-center justify-center h-full">
+                <div className="text-4xl font-bold mb-1 tabular-nums">{animatedCounters.high}</div>
+                <div className="text-sm opacity-90">High Risk Codes</div>
+                <div className="text-xs opacity-70 mt-2">Click to learn more</div>
+              </CardContent>
+            </Card>
+            {/* Back */}
+            <Card className="absolute inset-0 bg-gradient-to-br from-orange-700 to-orange-800 text-white border-0 shadow-lg" style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>
+              <CardContent className="pt-4 px-4 pb-4 h-full flex flex-col justify-between text-xs">
+                <div>
+                  <div className="font-bold mb-1.5 text-sm">📞 Monitored Phone Codes</div>
+                  <p className="leading-tight mb-2">We track {animatedCounters.high} country and area codes frequently used in romance fraud schemes. These numbers are red-flagged in our global database.</p>
+                </div>
+                <div className="bg-orange-900/50 p-2 rounded text-xs italic">
+                  💡 "Real love doesn't ask for money transfers."
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        {/* Total Hotspots Card */}
+        <div 
+          className="relative h-32 cursor-pointer group"
+          onClick={() => toggleCard('total')}
+          style={{ perspective: '1000px' }}
+        >
+          <div 
+            className={`relative w-full h-full transition-transform duration-700 ${flippedCards.total ? '[transform:rotateY(180deg)]' : ''}`}
+            style={{ transformStyle: 'preserve-3d' }}
+          >
+            {/* Front */}
+            <Card className="absolute inset-0 bg-gradient-to-br from-yellow-600 to-yellow-700 text-white border-0 shadow-lg group-hover:shadow-2xl transition-shadow duration-300" style={{ backfaceVisibility: 'hidden' }}>
+              <CardContent className="pt-6 flex flex-col items-center justify-center h-full">
+                <div className="text-4xl font-bold mb-1 tabular-nums">{animatedCounters.total}</div>
+                <div className="text-sm opacity-90">Total Hotspots Monitored</div>
+                <div className="text-xs opacity-70 mt-2">Click to learn more</div>
+              </CardContent>
+            </Card>
+            {/* Back */}
+            <Card className="absolute inset-0 bg-gradient-to-br from-yellow-700 to-yellow-800 text-white border-0 shadow-lg" style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>
+              <CardContent className="pt-4 px-4 pb-4 h-full flex flex-col justify-between text-xs">
+                <div>
+                  <div className="font-bold mb-1.5 text-sm">🌍 Global Coverage</div>
+                  <p className="leading-tight mb-2">Our intelligence network monitors {animatedCounters.total} fraud hotspots worldwide, updated daily with new scam patterns and emerging threats.</p>
+                </div>
+                <div className="bg-yellow-900/50 p-2 rounded text-xs italic">
+                  💡 "Your heart deserves protection—trust your instincts."
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
     </div>
   )
