@@ -151,10 +151,31 @@ class TrustedContact(Base):
     user_identifier = Column(String, index=True)
     contact_name = Column(String)
     contact_email_or_phone = Column(String)
+    contact_email = Column(String, nullable=True)
+    contact_phone = Column(String, nullable=True)
     alert_preference = Column(String, default='EMAIL')
+    alert_threshold = Column(Integer, default=40)
     is_active = Column(Boolean, default=True)
     last_alert_timestamp = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    
+    alert_logs = relationship("AlertLog", back_populates="contact")
+
+class AlertLog(Base):
+    __tablename__ = "alert_logs"
+    
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    contact_id = Column(Integer, ForeignKey("trusted_contacts.id"))
+    user_identifier = Column(String, index=True)
+    conversation_id = Column(String, index=True)
+    trust_score = Column(Integer)
+    threshold = Column(Integer)
+    channel = Column(String, default='N/A')
+    reason = Column(Text, nullable=True)
+    status = Column(String, default='LOGGED')
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    contact = relationship("TrustedContact", back_populates="alert_logs")
 
 class ScammerProfile(Base):
     __tablename__ = "scammer_profiles"
@@ -258,6 +279,28 @@ def get_db():
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+    
+    from sqlalchemy import inspect, text
+    inspector = inspect(engine)
+    
+    if 'trusted_contacts' in inspector.get_table_names():
+        existing_columns = [col['name'] for col in inspector.get_columns('trusted_contacts')]
+        
+        with engine.connect() as conn:
+            if 'contact_email' not in existing_columns:
+                conn.execute(text('ALTER TABLE trusted_contacts ADD COLUMN contact_email TEXT'))
+                conn.commit()
+                print('✅ Added contact_email column to trusted_contacts')
+            
+            if 'contact_phone' not in existing_columns:
+                conn.execute(text('ALTER TABLE trusted_contacts ADD COLUMN contact_phone TEXT'))
+                conn.commit()
+                print('✅ Added contact_phone column to trusted_contacts')
+            
+            if 'alert_threshold' not in existing_columns:
+                conn.execute(text('ALTER TABLE trusted_contacts ADD COLUMN alert_threshold INTEGER DEFAULT 40'))
+                conn.commit()
+                print('✅ Added alert_threshold column to trusted_contacts')
 
 def populate_safety_replies():
     """Populate SafetyReply table with contextual safety suggestions"""

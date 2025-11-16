@@ -997,20 +997,36 @@ async def generate_trust_score(
     db.commit()
     db.refresh(db_report)
     
-    if trust_score < 50 and conversation:
-        from app.models.database import TrustedContact
+    if conversation:
+        from app.models.database import TrustedContact, AlertLog
         
-        # Log potential alert for all linked trusted contacts
         contacts = db.query(TrustedContact).filter(
             TrustedContact.user_identifier == conversation.id,
             TrustedContact.is_active == True
         ).all()
         
         if contacts:
-            print(f"⚠️ Guardian Mode Alert: Trust score {trust_score} below threshold for conversation {conversation.id}")
-            print(f"📧 Would notify {len(contacts)} trusted contact(s):")
             for contact in contacts:
-                print(f"   - {contact.contact_name} ({contact.contact_email_or_phone}) via {contact.alert_preference}")
+                threshold = contact.alert_threshold or 40
+                if trust_score < threshold:
+                    alert_log = AlertLog(
+                        contact_id=contact.id,
+                        user_identifier=conversation.id,
+                        conversation_id=conversation.id,
+                        trust_score=trust_score,
+                        threshold=threshold,
+                        channel='EMAIL' if contact.contact_email else 'SMS' if contact.contact_phone else 'N/A',
+                        reason=f"Trust score {trust_score} below threshold {threshold}",
+                        status='LOGGED'
+                    )
+                    db.add(alert_log)
+                    
+                    contact.last_alert_timestamp = datetime.utcnow()
+                    
+                    print(f"⚠️ Guardian Mode Alert: Trust score {trust_score} below threshold {threshold} for conversation {conversation.id}")
+                    print(f"📧 Logged alert for {contact.contact_name} ({contact.contact_email or contact.contact_phone})")
+            
+            db.commit()
     
     report = TrustScoreReport(
         report_id=report_id,
@@ -1403,10 +1419,11 @@ async def get_safety_replies(
 
 @app.post("/guardian/contact/add")
 async def add_trusted_contact(
-    user_identifier: str,
-    contact_name: str,
-    contact_email_or_phone: str,
-    alert_preference: str = 'EMAIL',
+    user_identifier: str = Form(...),
+    contact_name: str = Form(...),
+    contact_email: str = Form(...),
+    contact_phone: Optional[str] = Form(None),
+    alert_threshold: Optional[int] = Form(40),
     db: Session = Depends(get_db)
 ):
     """
@@ -1415,8 +1432,9 @@ async def add_trusted_contact(
     Args:
         user_identifier: User ID or conversation ID
         contact_name: Name of the trusted contact
-        contact_email_or_phone: Email or phone number for alerts
-        alert_preference: Alert method (EMAIL, SMS, NONE)
+        contact_email: Email address for alerts (primary)
+        contact_phone: Phone number for alerts (optional, secondary)
+        alert_threshold: Trust score threshold that triggers alerts (default 40)
         db: Database session
         
     Returns:
@@ -1427,8 +1445,10 @@ async def add_trusted_contact(
     trusted_contact = TrustedContact(
         user_identifier=user_identifier,
         contact_name=contact_name,
-        contact_email_or_phone=contact_email_or_phone,
-        alert_preference=alert_preference,
+        contact_email=contact_email,
+        contact_phone=contact_phone,
+        contact_email_or_phone=contact_email,
+        alert_threshold=alert_threshold or 40,
         is_active=True
     )
     
@@ -1440,8 +1460,9 @@ async def add_trusted_contact(
         "id": trusted_contact.id,
         "user_identifier": trusted_contact.user_identifier,
         "contact_name": trusted_contact.contact_name,
-        "contact_email_or_phone": trusted_contact.contact_email_or_phone,
-        "alert_preference": trusted_contact.alert_preference,
+        "contact_email": trusted_contact.contact_email,
+        "contact_phone": trusted_contact.contact_phone,
+        "alert_threshold": trusted_contact.alert_threshold,
         "is_active": trusted_contact.is_active,
         "created_at": trusted_contact.created_at.isoformat() + "Z"
     }
@@ -1475,8 +1496,10 @@ async def get_trusted_contacts(
             {
                 "id": contact.id,
                 "contact_name": contact.contact_name,
-                "contact_email_or_phone": contact.contact_email_or_phone,
-                "alert_preference": contact.alert_preference,
+                "contact_email": contact.contact_email,
+                "contact_phone": contact.contact_phone,
+                "alert_threshold": contact.alert_threshold,
+                "is_active": contact.is_active,
                 "last_alert_timestamp": contact.last_alert_timestamp.isoformat() + "Z" if contact.last_alert_timestamp else None,
                 "created_at": contact.created_at.isoformat() + "Z"
             }
