@@ -104,6 +104,11 @@ function App() {
   const [safetyReplies, setSafetyReplies] = useState<SafetyReply[]>([])
   const [reportHash, setReportHash] = useState<string | null>(null)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
+  const [showScammerProfile, setShowScammerProfile] = useState(false)
+  const [scammerName, setScammerName] = useState('')
+  const [scammerPhone, setScammerPhone] = useState('')
+  const [scammerEmail, setScammerEmail] = useState('')
+  const [victimNarrative, setVictimNarrative] = useState('')
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
@@ -225,6 +230,16 @@ Please send me $500 right now via crypto!`
       }
       if (chatMessages.trim()) {
         formData.append('chat_messages', chatMessages)
+      }
+      
+      if (scammerName || scammerPhone || scammerEmail || victimNarrative) {
+        const scammerProfile = {
+          claimed_name: scammerName || null,
+          phone_numbers: scammerPhone ? [scammerPhone] : null,
+          email_addresses: scammerEmail ? [scammerEmail] : null,
+          victim_narrative: victimNarrative || null
+        }
+        formData.append('scammer_profile_json', JSON.stringify(scammerProfile))
       }
 
       const response = await fetch(`${API_URL}/trustscore/generate`, {
@@ -446,6 +461,89 @@ Please send me $500 right now via crypto!`
             </Card>
           </div>
         ) : null}
+
+        {!report && !showHotspotMap && (
+          <Card className="bg-white/95 border-[#5B3256] border-2 rounded-xl shadow-lg mb-6 animate-fade-in animate-delay-200">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center text-[#5B3256]" style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 700 }}>
+                    <Shield className="mr-2 text-[#5B3256]" />
+                    Scammer Profile (Optional)
+                  </CardTitle>
+                  <CardDescription className="text-[#5B3256]/70">
+                    Add details for comprehensive Evidence Locker™ report
+                  </CardDescription>
+                </div>
+                <Button
+                  onClick={() => setShowScammerProfile(!showScammerProfile)}
+                  variant="outline"
+                  className="border-[#5B3256] text-[#5B3256]"
+                >
+                  {showScammerProfile ? 'Hide' : 'Show'}
+                </Button>
+              </div>
+            </CardHeader>
+            {showScammerProfile && (
+              <CardContent className="space-y-4">
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-[#5B3256] mb-2">
+                      Scammer's Name
+                    </label>
+                    <input
+                      type="text"
+                      value={scammerName}
+                      onChange={(e) => setScammerName(e.target.value)}
+                      placeholder="e.g., John Smith"
+                      className="w-full px-4 py-2 bg-[#F5E8DC] border-[#E6B7BE] border-2 rounded-xl text-[#5B3256] placeholder:text-[#5B3256]/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-[#5B3256] mb-2">
+                      Phone Number
+                    </label>
+                    <input
+                      type="text"
+                      value={scammerPhone}
+                      onChange={(e) => setScammerPhone(e.target.value)}
+                      placeholder="e.g., +234 123 456 7890"
+                      className="w-full px-4 py-2 bg-[#F5E8DC] border-[#E6B7BE] border-2 rounded-xl text-[#5B3256] placeholder:text-[#5B3256]/50"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-[#5B3256] mb-2">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    value={scammerEmail}
+                    onChange={(e) => setScammerEmail(e.target.value)}
+                    placeholder="e.g., scammer@example.com"
+                    className="w-full px-4 py-2 bg-[#F5E8DC] border-[#E6B7BE] border-2 rounded-xl text-[#5B3256] placeholder:text-[#5B3256]/50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-[#5B3256] mb-2">
+                    Your Statement (What Happened)
+                  </label>
+                  <Textarea
+                    value={victimNarrative}
+                    onChange={(e) => setVictimNarrative(e.target.value)}
+                    placeholder="Describe what happened, how you met, financial losses, etc. This will be included in your legal evidence report."
+                    className="min-h-32 bg-[#F5E8DC] border-[#E6B7BE] border-2 text-[#5B3256] placeholder:text-[#5B3256]/50 rounded-xl"
+                  />
+                </div>
+                <Alert className="bg-blue-50 border-blue-300">
+                  <AlertDescription className="text-sm text-blue-900">
+                    This information will be included in your Evidence Locker™ PDF report for law enforcement and legal proceedings.
+                  </AlertDescription>
+                </Alert>
+              </CardContent>
+            )}
+          </Card>
+        )}
 
         {error && (
           <Alert className="mb-6 bg-red-900 border-red-600">
