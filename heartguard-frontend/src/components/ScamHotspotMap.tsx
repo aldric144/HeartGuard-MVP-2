@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Globe, Search, MapPin, AlertTriangle, Shield } from 'lucide-react'
+import { Globe, Search, MapPin, AlertTriangle, Shield, Info, X } from 'lucide-react'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -50,6 +50,35 @@ export function ScamHotspotMap() {
   const [result, setResult] = useState<LocationRiskData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [selectedRegion, setSelectedRegion] = useState<RegionData | null>(null)
+  const [hoveredRegion, setHoveredRegion] = useState<RegionData | null>(null)
+  const [showDetailPanel, setShowDetailPanel] = useState(false)
+  const [focusedRegion, setFocusedRegion] = useState<RegionData | null>(null)
+  const [animatedCounters, setAnimatedCounters] = useState({ extreme: 0, high: 0, total: 0 })
+  const [showResult, setShowResult] = useState(false)
+
+  useEffect(() => {
+    const extremeCount = HOTSPOT_REGIONS.filter(r => r.risk_level === 'Extreme').length
+    const highCount = HOTSPOT_REGIONS.reduce((acc, r) => acc + r.codes.length, 0)
+    const totalCount = HOTSPOT_REGIONS.length
+
+    const duration = 1500
+    const steps = 60
+    const interval = duration / steps
+
+    let step = 0
+    const timer = setInterval(() => {
+      step++
+      const progress = step / steps
+      setAnimatedCounters({
+        extreme: Math.floor(extremeCount * progress),
+        high: Math.floor(highCount * progress),
+        total: Math.floor(totalCount * progress)
+      })
+      if (step >= steps) clearInterval(timer)
+    }, interval)
+
+    return () => clearInterval(timer)
+  }, [])
 
   const checkPhoneNumber = async (codeToCheck?: string) => {
     const code = codeToCheck || phoneNumber
@@ -58,12 +87,14 @@ export function ScamHotspotMap() {
     setLoading(true)
     setError(null)
     setResult(null)
+    setShowResult(false)
 
     try {
       const response = await fetch(`${API_URL}/analyze/location/${encodeURIComponent(code)}`)
       if (!response.ok) throw new Error('Failed to check phone number')
       const data = await response.json()
       setResult(data)
+      setTimeout(() => setShowResult(true), 100)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
@@ -74,6 +105,14 @@ export function ScamHotspotMap() {
   const quickCheck = (code: string) => {
     setPhoneNumber(code)
     checkPhoneNumber(code)
+  }
+
+  const handleRegionClick = (region: RegionData) => {
+    setSelectedRegion(region)
+    setFocusedRegion(region)
+    setShowDetailPanel(true)
+    setPhoneNumber(region.codes[0])
+    checkPhoneNumber(region.codes[0])
   }
 
   const getRiskColor = (riskLevel: string) => {
@@ -111,59 +150,93 @@ export function ScamHotspotMap() {
           <div className="grid md:grid-cols-2 gap-6">
             {/* Left: Interactive World Map */}
             <div>
-              <div className="relative bg-gradient-to-br from-[#3C4B7C]/10 to-[#5B3256]/10 rounded-xl p-4 mb-3">
-                {/* World Map SVG */}
-                <svg viewBox="0 0 100 70" className="w-full h-auto">
-                  {/* Ocean background */}
-                  <rect x="0" y="0" width="100" height="70" fill="#DBEAFE" opacity="0.5" />
+              <div className="relative bg-gradient-to-br from-[#F6EAF1] to-[#E6B7BE]/20 rounded-xl p-4 mb-3 shadow-inner">
+                <svg 
+                  viewBox="0 0 100 70" 
+                  className="w-full h-auto transition-transform duration-700 ease-out"
+                  style={{
+                    transform: focusedRegion ? `scale(1.15) translate(${(50 - focusedRegion.position.x) * 0.3}px, ${(35 - focusedRegion.position.y) * 0.3}px)` : 'scale(1)'
+                  }}
+                >
+                  <defs>
+                    <radialGradient id="focusGlow" cx="50%" cy="50%" r="50%">
+                      <stop offset="0%" stopColor="#E6B7BE" stopOpacity="0.4" />
+                      <stop offset="100%" stopColor="#E6B7BE" stopOpacity="0" />
+                    </radialGradient>
+                    <filter id="glow">
+                      <feGaussianBlur stdDeviation="1.5" result="coloredBlur"/>
+                      <feMerge>
+                        <feMergeNode in="coloredBlur"/>
+                        <feMergeNode in="SourceGraphic"/>
+                      </feMerge>
+                    </filter>
+                  </defs>
                   
-                  {/* Continents with better contrast */}
-                  {/* North America */}
-                  <path d="M 8 30 L 12 25 L 18 22 L 24 24 L 28 28 L 30 35 L 28 42 L 24 48 L 20 50 L 15 48 L 12 45 L 10 40 L 8 35 Z" fill="#CBD5E1" stroke="#475569" strokeWidth="0.3" opacity="0.8" />
-                  {/* South America */}
-                  <path d="M 24 52 L 28 50 L 32 52 L 34 58 L 32 65 L 28 68 L 24 66 L 22 60 L 23 54 Z" fill="#CBD5E1" stroke="#475569" strokeWidth="0.3" opacity="0.8" />
-                  {/* Europe */}
-                  <path d="M 45 28 L 50 25 L 56 26 L 60 30 L 58 35 L 54 38 L 48 36 L 45 32 Z" fill="#CBD5E1" stroke="#475569" strokeWidth="0.3" opacity="0.8" />
-                  {/* Africa */}
-                  <path d="M 46 40 L 50 38 L 56 40 L 58 45 L 58 52 L 56 60 L 52 66 L 48 64 L 46 58 L 44 50 L 45 44 Z" fill="#CBD5E1" stroke="#475569" strokeWidth="0.3" opacity="0.8" />
-                  {/* Asia */}
-                  <path d="M 62 28 L 68 24 L 75 26 L 82 30 L 88 35 L 90 42 L 88 48 L 82 52 L 76 54 L 70 52 L 65 48 L 62 42 L 60 35 Z" fill="#CBD5E1" stroke="#475569" strokeWidth="0.3" opacity="0.8" />
-                  {/* Australia */}
-                  <path d="M 78 58 L 84 56 L 88 58 L 90 62 L 88 66 L 82 68 L 78 66 L 76 62 Z" fill="#CBD5E1" stroke="#475569" strokeWidth="0.3" opacity="0.8" />
+                  <rect x="0" y="0" width="100" height="70" fill="#F6EAF1" opacity="0.6" />
                   
-                  {/* Hotspot markers */}
+                  <path d="M 8 30 L 12 25 L 18 22 L 24 24 L 28 28 L 30 35 L 28 42 L 24 48 L 20 50 L 15 48 L 12 45 L 10 40 L 8 35 Z" fill="#9AA5B1" stroke="#334155" strokeWidth="0.4" opacity="0.85" />
+                  <path d="M 24 52 L 28 50 L 32 52 L 34 58 L 32 65 L 28 68 L 24 66 L 22 60 L 23 54 Z" fill="#9AA5B1" stroke="#334155" strokeWidth="0.4" opacity="0.85" />
+                  <path d="M 45 28 L 50 25 L 56 26 L 60 30 L 58 35 L 54 38 L 48 36 L 45 32 Z" fill="#9AA5B1" stroke="#334155" strokeWidth="0.4" opacity="0.85" />
+                  <path d="M 46 40 L 50 38 L 56 40 L 58 45 L 58 52 L 56 60 L 52 66 L 48 64 L 46 58 L 44 50 L 45 44 Z" fill="#9AA5B1" stroke="#334155" strokeWidth="0.4" opacity="0.85" />
+                  <path d="M 62 28 L 68 24 L 75 26 L 82 30 L 88 35 L 90 42 L 88 48 L 82 52 L 76 54 L 70 52 L 65 48 L 62 42 L 60 35 Z" fill="#9AA5B1" stroke="#334155" strokeWidth="0.4" opacity="0.85" />
+                  <path d="M 78 58 L 84 56 L 88 58 L 90 62 L 88 66 L 82 68 L 78 66 L 76 62 Z" fill="#9AA5B1" stroke="#334155" strokeWidth="0.4" opacity="0.85" />
+                  
                   {HOTSPOT_REGIONS.map((region, idx) => (
-                    <g key={idx}>
+                    <g 
+                      key={idx}
+                      onMouseEnter={() => setHoveredRegion(region)}
+                      onMouseLeave={() => setHoveredRegion(null)}
+                      onClick={() => handleRegionClick(region)}
+                      className="cursor-pointer"
+                    >
+                      {focusedRegion?.name === region.name && (
+                        <circle
+                          cx={region.position.x}
+                          cy={region.position.y}
+                          r="8"
+                          fill="url(#focusGlow)"
+                          className="animate-pulse"
+                        />
+                      )}
                       <circle
                         cx={region.position.x}
                         cy={region.position.y}
-                        r="2.5"
+                        r={hoveredRegion?.name === region.name ? "3" : "2.5"}
                         fill={region.color}
-                        opacity="0.9"
-                        className="cursor-pointer hover:opacity-100 transition-opacity"
-                        onClick={() => {
-                          setSelectedRegion(region)
-                          quickCheck(region.codes[0])
-                        }}
+                        opacity="0.95"
+                        filter={hoveredRegion?.name === region.name ? "url(#glow)" : undefined}
+                        className="transition-all duration-300"
                       />
                       <circle
                         cx={region.position.x}
                         cy={region.position.y}
-                        r="4.5"
+                        r="5"
                         fill={region.color}
-                        opacity="0.3"
+                        opacity="0.25"
                         className="animate-ping"
-                        style={{ animationDuration: '2s' }}
+                        style={{ animationDuration: '2.5s' }}
                       />
-                      {/* Region label */}
+                      {(hoveredRegion?.name === region.name || focusedRegion?.name === region.name) && (
+                        <circle
+                          cx={region.position.x}
+                          cy={region.position.y}
+                          r="6"
+                          fill="none"
+                          stroke={region.color}
+                          strokeWidth="0.5"
+                          opacity="0.6"
+                          className="animate-ping"
+                          style={{ animationDuration: '1s' }}
+                        />
+                      )}
                       <text
                         x={region.position.x}
-                        y={region.position.y - 4}
-                        fontSize="2.5"
-                        fill="#1E293B"
+                        y={region.position.y - 4.5}
+                        fontSize={hoveredRegion?.name === region.name ? "2.8" : "2.5"}
+                        fill="#0F172A"
                         textAnchor="middle"
-                        className="pointer-events-none font-semibold"
-                        style={{ textShadow: '0 0 2px white' }}
+                        className="pointer-events-none font-bold transition-all duration-300"
+                        style={{ textShadow: '0 0 3px white, 0 0 2px white' }}
                       >
                         {region.name}
                       </text>
@@ -296,7 +369,11 @@ export function ScamHotspotMap() {
                   )}
 
                   {result && (
-                    <div className={`p-3 rounded-xl border-2 ${result.is_known_scam_origin ? 'bg-red-50 border-red-600' : 'bg-green-50 border-green-600'}`}>
+                    <div 
+                      className={`p-3 rounded-xl border-2 transition-all duration-500 ${
+                        showResult ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
+                      } ${result.is_known_scam_origin ? 'bg-red-50 border-red-600' : 'bg-green-50 border-green-600'}`}
+                    >
                       <div className="flex items-start gap-2">
                         {result.is_known_scam_origin ? (
                           <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
@@ -336,16 +413,16 @@ export function ScamHotspotMap() {
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-medium text-gray-700">Score:</span>
                             <div className="flex items-center gap-2 flex-1">
-                              <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                              <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
                                 <div
-                                  className="h-full transition-all duration-500"
+                                  className="h-full transition-all duration-1000 ease-out"
                                   style={{
-                                    width: `${result.location_risk_score}%`,
+                                    width: showResult ? `${result.location_risk_score}%` : '0%',
                                     backgroundColor: getRiskColor(result.risk_level || 'Medium')
                                   }}
                                 />
                               </div>
-                              <span className="text-xs font-bold" style={{ color: getRiskColor(result.risk_level || 'Medium') }}>
+                              <span className="text-xs font-bold tabular-nums" style={{ color: getRiskColor(result.risk_level || 'Medium') }}>
                                 {result.location_risk_score}/100
                               </span>
                             </div>
@@ -361,23 +438,23 @@ export function ScamHotspotMap() {
         </CardContent>
       </Card>
 
-      {/* Quick Stats */}
+      {/* Quick Stats with Animated Counters */}
       <div className="grid md:grid-cols-3 gap-4">
-        <Card className="bg-gradient-to-br from-red-600 to-red-700 text-white border-0">
+        <Card className="bg-gradient-to-br from-red-600 to-red-700 text-white border-0 shadow-lg hover:shadow-xl transition-shadow duration-300">
           <CardContent className="pt-6">
-            <div className="text-3xl font-bold mb-1">8</div>
+            <div className="text-4xl font-bold mb-1 tabular-nums">{animatedCounters.extreme}</div>
             <div className="text-sm opacity-90">Extreme Risk Regions</div>
           </CardContent>
         </Card>
-        <Card className="bg-gradient-to-br from-orange-600 to-orange-700 text-white border-0">
+        <Card className="bg-gradient-to-br from-orange-600 to-orange-700 text-white border-0 shadow-lg hover:shadow-xl transition-shadow duration-300">
           <CardContent className="pt-6">
-            <div className="text-3xl font-bold mb-1">32</div>
+            <div className="text-4xl font-bold mb-1 tabular-nums">{animatedCounters.high}</div>
             <div className="text-sm opacity-90">High Risk Codes</div>
           </CardContent>
         </Card>
-        <Card className="bg-gradient-to-br from-yellow-600 to-yellow-700 text-white border-0">
+        <Card className="bg-gradient-to-br from-yellow-600 to-yellow-700 text-white border-0 shadow-lg hover:shadow-xl transition-shadow duration-300">
           <CardContent className="pt-6">
-            <div className="text-3xl font-bold mb-1">72</div>
+            <div className="text-4xl font-bold mb-1 tabular-nums">{animatedCounters.total}</div>
             <div className="text-sm opacity-90">Total Hotspots Monitored</div>
           </CardContent>
         </Card>
