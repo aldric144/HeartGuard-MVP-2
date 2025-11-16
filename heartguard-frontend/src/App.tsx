@@ -145,6 +145,9 @@ function App() {
   const [showConversationList, setShowConversationList] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [showArchived, setShowArchived] = useState(false)
+  const [suspectedIPs, setSuspectedIPs] = useState('')
+  const [ipIntelligence, setIpIntelligence] = useState<any[]>([])
+  const [loadingIP, setLoadingIP] = useState(false)
 
   useEffect(() => {
     const stored = localStorage.getItem('heartguard_people')
@@ -241,6 +244,29 @@ function App() {
         return true
       })
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+  }
+
+  const analyzeIPs = async () => {
+    if (!suspectedIPs.trim()) return
+    
+    setLoadingIP(true)
+    const ips = suspectedIPs.split(/[\s,]+/).filter(ip => ip.trim())
+    const results = []
+    
+    for (const ip of ips) {
+      try {
+        const response = await fetch(`${API_URL}/ip/intel?ip=${encodeURIComponent(ip.trim())}`)
+        if (response.ok) {
+          const data = await response.json()
+          results.push(data)
+        }
+      } catch (err) {
+        console.error(`Failed to analyze IP ${ip}:`, err)
+      }
+    }
+    
+    setIpIntelligence(results)
+    setLoadingIP(false)
   }
 
   useEffect(() => {

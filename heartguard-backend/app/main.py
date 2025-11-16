@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -14,6 +14,7 @@ import io
 import uuid
 from dotenv import load_dotenv
 import os
+import httpx
 
 from app.models.database import (
     Base, engine, get_db, init_db,
@@ -208,6 +209,26 @@ class ScammerProfileInput(BaseModel):
     other_agency_references: Optional[List[str]] = None
     social_handles: Optional[List[SocialHandleInput]] = None
     payment_instructions: Optional[List[PaymentInstructionInput]] = None
+
+class IPIntelligenceResponse(BaseModel):
+    ip: str
+    success: bool
+    country: Optional[str] = None
+    country_code: Optional[str] = None
+    region: Optional[str] = None
+    city: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    isp: Optional[str] = None
+    organization: Optional[str] = None
+    asn: Optional[str] = None
+    is_vpn: bool = False
+    is_proxy: bool = False
+    is_tor: bool = False
+    is_datacenter: bool = False
+    risk_score: int = 0
+    risk_level: str = "Unknown"
+    message: Optional[str] = None
 
 def detect_deepfake(image_data: bytes) -> tuple[str, List[str]]:
     try:
@@ -1462,3 +1483,80 @@ async def get_trusted_contacts(
             for contact in contacts
         ]
     }
+
+@app.get("/ip/intel", response_model=IPIntelligenceResponse)
+async def get_ip_intelligence(ip: str):
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(f"https://ipwho.is/{ip}")
+            
+            if response.status_code != 200:
+                return IPIntelligenceResponse(
+                    ip=ip,
+                    success=False,
+                    message="Failed to fetch IP intelligence"
+                )
+            
+            data = response.json()
+            
+            if not data.get("success", False):
+                return IPIntelligenceResponse(
+                    ip=ip,
+                    success=False,
+                    message=data.get("message", "IP lookup failed")
+                )
+            
+            security = data.get("security", {})
+            is_vpn = security.get("is_vpn", False)
+            is_proxy = security.get("is_proxy", False)
+            is_tor = security.get("is_tor", False)
+            is_datacenter = security.get("is_datacenter", False)
+            
+            risk_score = 0
+            if is_tor:
+                risk_score = 90
+            elif is_vpn or is_proxy:
+                risk_score = 70
+            elif is_datacenter:
+                risk_score = 50
+            else:
+                risk_score = 10
+            
+            if risk_score >= 70:
+                risk_level = "High"
+            elif risk_score >= 40:
+                risk_level = "Medium"
+            else:
+                risk_level = "Low"
+            
+            return IPIntelligenceResponse(
+                ip=ip,
+                success=True,
+                country=data.get("country"),
+                country_code=data.get("country_code"),
+                region=data.get("region"),
+                city=data.get("city"),
+                latitude=data.get("latitude"),
+                longitude=data.get("longitude"),
+                isp=data.get("connection", {}).get("isp"),
+                organization=data.get("connection", {}).get("org"),
+                asn=data.get("connection", {}).get("asn"),
+                is_vpn=is_vpn,
+                is_proxy=is_proxy,
+                is_tor=is_tor,
+                is_datacenter=is_datacenter,
+                risk_score=risk_score,
+                risk_level=risk_level
+            )
+    except httpx.TimeoutException:
+        return IPIntelligenceResponse(
+            ip=ip,
+            success=False,
+            message="IP intelligence service timeout"
+        )
+    except Exception as e:
+        return IPIntelligenceResponse(
+            ip=ip,
+            success=False,
+            message=f"Error: {str(e)}"
+        )
