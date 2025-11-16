@@ -25,6 +25,9 @@ from app.models.database import (
     Conversation as DBConversation,
     AnalysisPoint as DBAnalysisPoint,
     GeographicRisk,
+    ScammerProfile as DBScammerProfile,
+    SocialHandle as DBSocialHandle,
+    PaymentInstruction as DBPaymentInstruction,
     populate_geographic_risks
 )
 from app.toneshift_engine import toneshift_engine
@@ -152,6 +155,59 @@ class LocationRiskResponse(BaseModel):
     matched_code: Optional[str] = None
     region: Optional[str] = None
     risk_level: Optional[str] = None
+
+class SocialHandleInput(BaseModel):
+    platform: str
+    username: Optional[str] = None
+    profile_url: Optional[str] = None
+    profile_id: Optional[str] = None
+    notes: Optional[str] = None
+
+class PaymentInstructionInput(BaseModel):
+    method: str
+    bank_name: Optional[str] = None
+    account_holder_name: Optional[str] = None
+    account_number: Optional[str] = None
+    routing_number: Optional[str] = None
+    swift_code: Optional[str] = None
+    iban: Optional[str] = None
+    receiver_name: Optional[str] = None
+    receiver_city: Optional[str] = None
+    receiver_country: Optional[str] = None
+    pickup_location: Optional[str] = None
+    app_handle: Optional[str] = None
+    crypto_chain: Optional[str] = None
+    crypto_address: Optional[str] = None
+    crypto_memo: Optional[str] = None
+    exchange_platform: Optional[str] = None
+    exchange_uid: Optional[str] = None
+    gift_card_brand: Optional[str] = None
+    gift_card_amount: Optional[float] = None
+    amount_requested: Optional[float] = None
+    notes: Optional[str] = None
+
+class ScammerProfileInput(BaseModel):
+    claimed_name: Optional[str] = None
+    aliases: Optional[List[str]] = None
+    claimed_dob: Optional[str] = None
+    claimed_address: Optional[str] = None
+    claimed_occupation: Optional[str] = None
+    phone_numbers: Optional[List[str]] = None
+    email_addresses: Optional[List[str]] = None
+    platform_met: Optional[str] = None
+    first_contact_date: Optional[str] = None
+    last_contact_date: Optional[str] = None
+    communication_channels: Optional[List[str]] = None
+    total_amount_requested: Optional[float] = None
+    total_amount_sent: Optional[float] = None
+    currency: Optional[str] = "USD"
+    victim_narrative: Optional[str] = None
+    ic3_complaint_number: Optional[str] = None
+    ftc_report_id: Optional[str] = None
+    police_incident_number: Optional[str] = None
+    other_agency_references: Optional[List[str]] = None
+    social_handles: Optional[List[SocialHandleInput]] = None
+    payment_instructions: Optional[List[PaymentInstructionInput]] = None
 
 def detect_deepfake(image_data: bytes) -> tuple[str, List[str]]:
     try:
@@ -593,6 +649,7 @@ async def generate_trust_score(
     chat_messages: Optional[str] = Form(None),
     profile_id: Optional[str] = Form(None),
     phone_number: Optional[str] = Form(None),
+    scammer_profile_json: Optional[str] = Form(None),
     db: Session = Depends(get_db)
 ):
     photo_analysis = None
@@ -780,6 +837,80 @@ async def generate_trust_score(
                 timestamp=pattern.timestamp
             )
             db.add(db_pattern)
+    
+    if scammer_profile_json and conversation:
+        import json
+        try:
+            profile_data = json.loads(scammer_profile_json)
+            profile_input = ScammerProfileInput(**profile_data)
+            
+            scammer_profile = DBScammerProfile(
+                id=str(uuid.uuid4()),
+                conversation_id=conversation.id,
+                claimed_name=profile_input.claimed_name,
+                aliases=profile_input.aliases,
+                claimed_dob=profile_input.claimed_dob,
+                claimed_address=profile_input.claimed_address,
+                claimed_occupation=profile_input.claimed_occupation,
+                phone_numbers=profile_input.phone_numbers,
+                email_addresses=profile_input.email_addresses,
+                platform_met=profile_input.platform_met,
+                first_contact_date=profile_input.first_contact_date,
+                last_contact_date=profile_input.last_contact_date,
+                communication_channels=profile_input.communication_channels,
+                total_amount_requested=profile_input.total_amount_requested,
+                total_amount_sent=profile_input.total_amount_sent,
+                currency=profile_input.currency,
+                victim_narrative=profile_input.victim_narrative,
+                ic3_complaint_number=profile_input.ic3_complaint_number,
+                ftc_report_id=profile_input.ftc_report_id,
+                police_incident_number=profile_input.police_incident_number,
+                other_agency_references=profile_input.other_agency_references
+            )
+            db.add(scammer_profile)
+            db.flush()
+            
+            if profile_input.social_handles:
+                for handle_input in profile_input.social_handles:
+                    social_handle = DBSocialHandle(
+                        scammer_profile_id=scammer_profile.id,
+                        platform=handle_input.platform,
+                        username=handle_input.username,
+                        profile_url=handle_input.profile_url,
+                        profile_id=handle_input.profile_id,
+                        notes=handle_input.notes
+                    )
+                    db.add(social_handle)
+            
+            if profile_input.payment_instructions:
+                for payment_input in profile_input.payment_instructions:
+                    payment_instruction = DBPaymentInstruction(
+                        scammer_profile_id=scammer_profile.id,
+                        method=payment_input.method,
+                        bank_name=payment_input.bank_name,
+                        account_holder_name=payment_input.account_holder_name,
+                        account_number=payment_input.account_number,
+                        routing_number=payment_input.routing_number,
+                        swift_code=payment_input.swift_code,
+                        iban=payment_input.iban,
+                        receiver_name=payment_input.receiver_name,
+                        receiver_city=payment_input.receiver_city,
+                        receiver_country=payment_input.receiver_country,
+                        pickup_location=payment_input.pickup_location,
+                        app_handle=payment_input.app_handle,
+                        crypto_chain=payment_input.crypto_chain,
+                        crypto_address=payment_input.crypto_address,
+                        crypto_memo=payment_input.crypto_memo,
+                        exchange_platform=payment_input.exchange_platform,
+                        exchange_uid=payment_input.exchange_uid,
+                        gift_card_brand=payment_input.gift_card_brand,
+                        gift_card_amount=payment_input.gift_card_amount,
+                        amount_requested=payment_input.amount_requested,
+                        notes=payment_input.notes
+                    )
+                    db.add(payment_instruction)
+        except Exception as e:
+            print(f"⚠️ Error saving scammer profile: {str(e)}")
     
     db.commit()
     db.refresh(db_report)
@@ -1063,6 +1194,10 @@ async def generate_evidence_report(
             GeographicRisk.code == normalized_code
         ).first()
     
+    scammer_profile = None
+    if hasattr(conversation, 'scammer_profile') and conversation.scammer_profile:
+        scammer_profile = conversation.scammer_profile
+    
     app_version = os.getenv("APP_VERSION", "1.0.0")
     backend_version = os.getenv("BACKEND_VERSION", "1.0.0")
     
@@ -1070,6 +1205,7 @@ async def generate_evidence_report(
         conversation, 
         analysis_points, 
         geographic_risk,
+        scammer_profile,
         app_version,
         backend_version
     )

@@ -156,6 +156,94 @@ class TrustedContact(Base):
     last_alert_timestamp = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class ScammerProfile(Base):
+    __tablename__ = "scammer_profiles"
+    
+    id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    conversation_id = Column(String, ForeignKey("conversations.id"), unique=True)
+    
+    claimed_name = Column(String, nullable=True)
+    aliases = Column(JSON, nullable=True)  # List of alternate names
+    claimed_dob = Column(String, nullable=True)
+    claimed_address = Column(Text, nullable=True)
+    claimed_occupation = Column(String, nullable=True)
+    
+    phone_numbers = Column(JSON, nullable=True)  # List of phone numbers
+    email_addresses = Column(JSON, nullable=True)  # List of emails
+    
+    platform_met = Column(String, nullable=True)  # Where you first met
+    first_contact_date = Column(String, nullable=True)
+    last_contact_date = Column(String, nullable=True)
+    communication_channels = Column(JSON, nullable=True)  # List of channels used
+    
+    total_amount_requested = Column(Float, nullable=True)
+    total_amount_sent = Column(Float, nullable=True)
+    currency = Column(String, default="USD")
+    
+    victim_narrative = Column(Text, nullable=True)
+    
+    ic3_complaint_number = Column(String, nullable=True)
+    ftc_report_id = Column(String, nullable=True)
+    police_incident_number = Column(String, nullable=True)
+    other_agency_references = Column(JSON, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    conversation = relationship("Conversation", backref="scammer_profile")
+    social_handles = relationship("SocialHandle", back_populates="scammer_profile", cascade="all, delete-orphan")
+    payment_instructions = relationship("PaymentInstruction", back_populates="scammer_profile", cascade="all, delete-orphan")
+
+class SocialHandle(Base):
+    __tablename__ = "social_handles"
+    
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    scammer_profile_id = Column(String, ForeignKey("scammer_profiles.id"))
+    
+    platform = Column(String)  # Tinder, Facebook, Instagram, WhatsApp, Telegram, etc.
+    username = Column(String, nullable=True)
+    profile_url = Column(String, nullable=True)
+    profile_id = Column(String, nullable=True)
+    notes = Column(Text, nullable=True)
+    
+    scammer_profile = relationship("ScammerProfile", back_populates="social_handles")
+
+class PaymentInstruction(Base):
+    __tablename__ = "payment_instructions"
+    
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    scammer_profile_id = Column(String, ForeignKey("scammer_profiles.id"))
+    
+    method = Column(String)  # Western Union, Bitcoin, Gift Cards, Bank Transfer, etc.
+    
+    bank_name = Column(String, nullable=True)
+    account_holder_name = Column(String, nullable=True)
+    account_number = Column(String, nullable=True)  # Store full, mask in PDF
+    routing_number = Column(String, nullable=True)
+    swift_code = Column(String, nullable=True)
+    iban = Column(String, nullable=True)
+    
+    receiver_name = Column(String, nullable=True)
+    receiver_city = Column(String, nullable=True)
+    receiver_country = Column(String, nullable=True)
+    pickup_location = Column(String, nullable=True)
+    
+    app_handle = Column(String, nullable=True)  # $cashtag, @venmo, email, phone
+    
+    crypto_chain = Column(String, nullable=True)  # BTC, ETH, TRX, etc.
+    crypto_address = Column(String, nullable=True)
+    crypto_memo = Column(String, nullable=True)
+    exchange_platform = Column(String, nullable=True)
+    exchange_uid = Column(String, nullable=True)
+    
+    gift_card_brand = Column(String, nullable=True)
+    gift_card_amount = Column(Float, nullable=True)
+    
+    amount_requested = Column(Float, nullable=True)
+    notes = Column(Text, nullable=True)
+    
+    scammer_profile = relationship("ScammerProfile", back_populates="payment_instructions")
+
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./heartguard.db")
 
 engine = create_engine(DATABASE_URL)
