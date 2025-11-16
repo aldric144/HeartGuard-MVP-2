@@ -141,14 +141,21 @@ def generate_evidence_pdf(
         ('Report Generated:', datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')),
         ('Conversation ID:', str(conversation.id)),
         ('Dataset SHA-256:', data_hash[:32] + '...'),
-        ('Full Hash:', data_hash),
     ]
     
     for label, value in metadata_items:
         pdf.set_font('Arial', 'B', 9)
         pdf.cell(50, 6, label, 0, 0)
         pdf.set_font('Arial', '', 8)
-        pdf.multi_cell(0, 6, str(value))
+        pdf.cell(0, 6, str(value), 0, 1)
+    
+    pdf.set_font('Arial', 'B', 9)
+    pdf.cell(50, 6, 'Full Hash:', 0, 0)
+    pdf.set_font('Arial', '', 7)
+    pdf.cell(0, 6, data_hash[:64], 0, 1)
+    pdf.set_font('Arial', '', 7)
+    pdf.cell(50, 6, '', 0, 0)
+    pdf.cell(0, 6, data_hash[64:], 0, 1)
     
     pdf.ln(5)
     
@@ -174,7 +181,7 @@ def generate_evidence_pdf(
         pdf.set_font('Arial', 'B', 9)
         pdf.cell(50, 6, label, 0, 0)
         pdf.set_font('Arial', '', 8)
-        pdf.multi_cell(0, 6, str(value))
+        pdf.cell(0, 6, str(value), 0, 1)
     
     pdf.ln(5)
     
@@ -220,7 +227,7 @@ def generate_evidence_pdf(
             pdf.set_font('Arial', 'B', 9)
             pdf.cell(50, 6, label, 0, 0)
             pdf.set_font('Arial', '', 8)
-            pdf.multi_cell(0, 6, str(value))
+            pdf.cell(0, 6, str(value), 0, 1)
         
         if geographic_risk.notes:
             pdf.ln(2)
@@ -293,7 +300,6 @@ def generate_evidence_pdf(
         ('Application:', 'HeartGuard Romance Fraud Detection System'),
         ('Backend Version:', 'v1.0.0 (SQLAlchemy + FastAPI)'),
         ('Database Engine:', 'SQLite'),
-        ('Report Dataset SHA-256:', data_hash),
         ('Total Analysis Points:', str(len(analysis_points))),
         ('Data Integrity:', 'Verified via cryptographic hash'),
     ]
@@ -301,8 +307,16 @@ def generate_evidence_pdf(
     for label, value in custody_items:
         pdf.set_font('Arial', 'B', 9)
         pdf.cell(60, 6, label, 0, 0)
-        pdf.set_font('Arial', '', 7)
-        pdf.multi_cell(0, 6, str(value))
+        pdf.set_font('Arial', '', 8)
+        pdf.cell(0, 6, str(value), 0, 1)
+    
+    pdf.set_font('Arial', 'B', 9)
+    pdf.cell(60, 6, 'Report Dataset SHA-256:', 0, 0)
+    pdf.set_font('Arial', '', 7)
+    pdf.cell(0, 6, data_hash[:64], 0, 1)
+    pdf.set_font('Arial', '', 7)
+    pdf.cell(60, 6, '', 0, 0)
+    pdf.cell(0, 6, data_hash[64:], 0, 1)
     
     pdf.ln(5)
     pdf.set_font('Arial', 'I', 8)
