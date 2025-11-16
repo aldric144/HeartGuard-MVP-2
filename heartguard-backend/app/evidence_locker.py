@@ -147,8 +147,8 @@ def generate_evidence_pdf(
     for label, value in metadata_items:
         pdf.set_font('Arial', 'B', 9)
         pdf.cell(50, 6, label, 0, 0)
-        pdf.set_font('Arial', '', 9)
-        pdf.multi_cell(0, 6, value)
+        pdf.set_font('Arial', '', 8)
+        pdf.multi_cell(0, 6, str(value))
     
     pdf.ln(5)
     
@@ -173,8 +173,8 @@ def generate_evidence_pdf(
     for label, value in summary_items:
         pdf.set_font('Arial', 'B', 9)
         pdf.cell(50, 6, label, 0, 0)
-        pdf.set_font('Arial', '', 9)
-        pdf.multi_cell(0, 6, value)
+        pdf.set_font('Arial', '', 8)
+        pdf.multi_cell(0, 6, str(value))
     
     pdf.ln(5)
     
@@ -219,8 +219,8 @@ def generate_evidence_pdf(
         for label, value in geo_items:
             pdf.set_font('Arial', 'B', 9)
             pdf.cell(50, 6, label, 0, 0)
-            pdf.set_font('Arial', '', 9)
-            pdf.multi_cell(0, 6, value)
+            pdf.set_font('Arial', '', 8)
+            pdf.multi_cell(0, 6, str(value))
         
         if geographic_risk.notes:
             pdf.ln(2)
@@ -301,8 +301,8 @@ def generate_evidence_pdf(
     for label, value in custody_items:
         pdf.set_font('Arial', 'B', 9)
         pdf.cell(60, 6, label, 0, 0)
-        pdf.set_font('Arial', '', 9)
-        pdf.multi_cell(0, 6, value)
+        pdf.set_font('Arial', '', 7)
+        pdf.multi_cell(0, 6, str(value))
     
     pdf.ln(5)
     pdf.set_font('Arial', 'I', 8)
