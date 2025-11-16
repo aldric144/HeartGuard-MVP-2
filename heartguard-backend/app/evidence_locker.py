@@ -43,7 +43,7 @@ class EvidenceReportPDF(FPDF):
         if hasattr(self, 'verification_hash'):
             self.set_font('Arial', 'I', 6)
             self.set_text_color(100, 100, 100)
-            verify_text = f'Verify at heartguard.app/verify | Hash: {self.verification_hash[:16]}...'
+            verify_text = f'Verify at heart-guard-mvp-2.vercel.app/verify | Hash: {self.verification_hash[:16]}...'
             self.cell(0, 5, verify_text, 0, 0, 'C')
 
 
@@ -361,7 +361,7 @@ def generate_evidence_pdf(
     pdf.set_font('Arial', '', 8)
     pdf.set_text_color(0, 0, 0)
     pdf.multi_cell(0, 5, 
-        'Scan the QR code below or visit heartguard.app/verify to verify this report\'s authenticity. '
+        'Scan the QR code below or visit heart-guard-mvp-2.vercel.app/verify to verify this report\'s authenticity. '
         'The verification system will confirm that this evidence has not been tampered with.'
     )
     pdf.ln(3)

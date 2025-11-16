@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import './App.css'
-import { Shield, Upload, MessageSquare, AlertTriangle, CheckCircle, XCircle, Heart, TrendingUp, Globe } from 'lucide-react'
+import { Shield, Upload, MessageSquare, AlertTriangle, CheckCircle, XCircle, Heart, TrendingUp, Globe, Download, ExternalLink } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -102,6 +102,8 @@ function App() {
   const [showTimeline, setShowTimeline] = useState(false)
   const [showHotspotMap, setShowHotspotMap] = useState(false)
   const [safetyReplies, setSafetyReplies] = useState<SafetyReply[]>([])
+  const [reportHash, setReportHash] = useState<string | null>(null)
+  const [downloadingPdf, setDownloadingPdf] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
@@ -306,6 +308,41 @@ Please send me $500 right now via crypto!`
     return colors[severity] || 'bg-gray-600 text-white'
   }
 
+  const handleDownloadEvidenceReport = async () => {
+    if (!report?.conversation_id) {
+      setError('No conversation ID available for this report')
+      return
+    }
+
+    setDownloadingPdf(true)
+    try {
+      const response = await fetch(`${API_URL}/evidence/generate/${report.conversation_id}`)
+      
+      if (!response.ok) {
+        throw new Error('Failed to generate evidence report')
+      }
+
+      const hash = response.headers.get('X-Report-Hash')
+      if (hash) {
+        setReportHash(hash)
+      }
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `HeartGuard_Evidence_${report.conversation_id.substring(0, 8)}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to download evidence report')
+    } finally {
+      setDownloadingPdf(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#5B3256] via-[#3C4B7C] to-[#E6B7BE] parallax-bg" style={{ fontFamily: "'Source Sans Pro', sans-serif" }}>
       <div className="container mx-auto px-4 py-8 max-w-6xl">
@@ -494,6 +531,58 @@ Please send me $500 right now via crypto!`
                 )}
               </CardContent>
             </Card>
+
+            {report.conversation_id && (
+              <Card className="bg-white/95 border-[#5B3256] border-2 rounded-xl shadow-lg">
+                <CardHeader>
+                  <CardTitle className="text-[#5B3256] flex items-center gap-2">
+                    <Shield className="w-6 h-6" />
+                    Evidence Locker™
+                  </CardTitle>
+                  <CardDescription>
+                    Download a legal-grade PDF report with QR code verification
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Button
+                    onClick={handleDownloadEvidenceReport}
+                    disabled={downloadingPdf}
+                    className="w-full bg-[#5B3256] hover:bg-[#5B3256]/90 text-white"
+                  >
+                    {downloadingPdf ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                        Generating Evidence Report...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="mr-2" />
+                        Download Evidence Report (PDF)
+                      </>
+                    )}
+                  </Button>
+                  
+                  {reportHash && (
+                    <Alert className="bg-green-50 border-green-300">
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                      <AlertTitle>Report Downloaded Successfully</AlertTitle>
+                      <AlertDescription className="space-y-2">
+                        <p>Your evidence report includes a QR code for verification.</p>
+                        <Button
+                          onClick={() => window.open(`/verify?hash=${reportHash}`, '_blank')}
+                          variant="outline"
+                          size="sm"
+                          className="mt-2"
+                        >
+                          <ExternalLink className="mr-2 h-4 w-4" />
+                          Verify Report Now
+                        </Button>
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             {safetyReplies.length > 0 && (
               <SafetyReplyCard 

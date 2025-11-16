@@ -592,6 +592,7 @@ async def generate_trust_score(
     photo_file: Optional[UploadFile] = File(None),
     chat_messages: Optional[str] = Form(None),
     profile_id: Optional[str] = Form(None),
+    phone_number: Optional[str] = Form(None),
     db: Session = Depends(get_db)
 ):
     photo_analysis = None
@@ -632,7 +633,8 @@ async def generate_trust_score(
         messages_list = [msg.strip() for msg in chat_messages.split("\n") if msg.strip()]
         
         if messages_list:
-            conversation = DBConversation(id=str(uuid.uuid4()))
+            phone_code = normalize_phone_number(phone_number) if phone_number else None
+            conversation = DBConversation(id=str(uuid.uuid4()), phone_code=phone_code)
             db.add(conversation)
             db.flush()
             
@@ -1089,7 +1091,8 @@ async def generate_evidence_report(
         pdf_buffer,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": f"attachment; filename={filename}"
+            "Content-Disposition": f"attachment; filename={filename}",
+            "X-Report-Hash": dataset_hash
         }
     )
 
