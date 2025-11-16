@@ -37,6 +37,13 @@ import re
 
 load_dotenv()
 
+TRUST_SCORE_WEIGHTS = {
+    'toneshift': 0.50,
+    'walletwatch': 0.30,
+    'photo': 0.15,
+    'metadata': 0.05
+}
+
 app = FastAPI()
 
 def normalize_phone_number(phone_input: str) -> str:
@@ -113,6 +120,12 @@ class MetadataAnalysisResponse(BaseModel):
     location_risk_rationale: Optional[str] = None
     is_known_scam_origin: bool = False
 
+class WeightedComponent(BaseModel):
+    engine: str
+    score: float
+    weight: float
+    contribution: float
+
 class TrustScoreReport(BaseModel):
     report_id: str
     trust_score: int
@@ -123,6 +136,7 @@ class TrustScoreReport(BaseModel):
     chat_analysis: Optional[ChatAnalysisResponse] = None
     created_at: str
     conversation_id: Optional[str] = None
+    weighted_breakdown: List[WeightedComponent] = []
 
 class TimelineMessage(BaseModel):
     message_index: int
@@ -473,9 +487,52 @@ def calculate_emotional_manipulation_index(sentiment_drift: List[Dict], patterns
     
     return round(emi, 3)
 
+def compute_weighted_trust_score(
+    toneshift_score: float,
+    walletwatch_score: float,
+    photo_score: float,
+    metadata_score: float
+) -> tuple[int, List[WeightedComponent]]:
+    """
+    Calculate weighted trust score and breakdown.
+    Returns: (final_score, weighted_breakdown)
+    """
+    scores = {
+        'toneshift': max(0, min(100, toneshift_score)),
+        'walletwatch': max(0, min(100, walletwatch_score)),
+        'photo': max(0, min(100, photo_score)),
+        'metadata': max(0, min(100, metadata_score))
+    }
+    
+    breakdown = []
+    total_contribution = 0
+    
+    for engine_key, score in scores.items():
+        weight = TRUST_SCORE_WEIGHTS[engine_key]
+        contribution = round(score * weight, 1)
+        total_contribution += contribution
+        
+        engine_names = {
+            'toneshift': 'ToneShift™',
+            'walletwatch': 'WalletWatch™',
+            'photo': 'Photo Provenance',
+            'metadata': 'Metadata Integrity'
+        }
+        
+        breakdown.append(WeightedComponent(
+            engine=engine_names[engine_key],
+            score=round(score, 1),
+            weight=weight,
+            contribution=contribution
+        ))
+    
+    final_score = int(round(total_contribution))
+    
+    return final_score, breakdown
+
 def calculate_trust_score(photo_analysis: Optional[PhotoAnalysisResponse], 
                          chat_analysis: Optional[ChatAnalysisResponse],
-                         metadata_analysis: Optional[MetadataAnalysisResponse] = None) -> tuple[int, str, str, List[str]]:
+                         metadata_analysis: Optional[MetadataAnalysisResponse] = None) -> tuple[int, str, str, List[str], List[WeightedComponent]]:
     insights = []
     
     toneshift_score = 100
@@ -528,14 +585,9 @@ def calculate_trust_score(photo_analysis: Optional[PhotoAnalysisResponse],
         if photo_analysis.metadata_issues:
             insights.append(f"Photo metadata issues detected ({len(photo_analysis.metadata_issues)} problems)")
     
-    weighted_score = (
-        (toneshift_score * 0.50) +
-        (walletwatch_score * 0.30) +
-        (photo_score * 0.15) +
-        (metadata_score * 0.05)
+    final_score, weighted_breakdown = compute_weighted_trust_score(
+        toneshift_score, walletwatch_score, photo_score, metadata_score
     )
-    
-    final_score = int(round(weighted_score))
     
     if final_score >= 70:
         color_band = "green"
@@ -547,7 +599,7 @@ def calculate_trust_score(photo_analysis: Optional[PhotoAnalysisResponse],
         color_band = "red"
         confidence = "Low"
     
-    return final_score, confidence, color_band, insights[:3]
+    return final_score, confidence, color_band, insights, weighted_breakdown[:3]
 
 @app.get("/healthz")
 async def healthz():
@@ -1062,7 +1114,8 @@ async def generate_trust_score(
         photo_analysis=photo_analysis,
         chat_analysis=chat_analysis,
         created_at=db_report.created_at.isoformat(),
-        conversation_id=conversation.id if conversation else None
+        conversation_id=conversation.id if conversation else None,
+        weighted_breakdown=weighted_breakdown
     )
     
     return report
