@@ -62,6 +62,17 @@ export function ScamHotspotMap() {
     high: false,
     total: false
   })
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+    setPrefersReducedMotion(mediaQuery.matches)
+    
+    const handleChange = (e: MediaQueryListEvent) => setPrefersReducedMotion(e.matches)
+    mediaQuery.addEventListener('change', handleChange)
+    
+    return () => mediaQuery.removeEventListener('change', handleChange)
+  }, [])
 
   useEffect(() => {
     setMapVisible(true)
@@ -86,10 +97,12 @@ export function ScamHotspotMap() {
       if (step >= steps) clearInterval(timer)
     }, interval)
 
-    setTimeout(() => startMapTour(), 800)
+    if (!prefersReducedMotion) {
+      setTimeout(() => startMapTour(), 800)
+    }
 
     return () => clearInterval(timer)
-  }, [])
+  }, [prefersReducedMotion])
 
   const startMapTour = () => {
     setTourActive(true)
@@ -142,11 +155,24 @@ export function ScamHotspotMap() {
   }
 
   const handleRegionClick = (region: RegionData) => {
+    setTourActive(false)
     setSelectedRegion(region)
     setFocusedRegion(region)
     setShowDetailPanel(true)
     setPhoneNumber(region.codes[0])
     checkPhoneNumber(region.codes[0])
+  }
+
+  const handleRegionKeyPress = (e: React.KeyboardEvent, region: RegionData) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      handleRegionClick(region)
+    }
+  }
+
+  const closeDetailPanel = () => {
+    setShowDetailPanel(false)
+    setFocusedRegion(null)
   }
 
   const getRiskColor = (riskLevel: string) => {
@@ -227,9 +253,21 @@ export function ScamHotspotMap() {
                       onMouseEnter={() => !tourActive && setHoveredRegion(region)}
                       onMouseLeave={() => setHoveredRegion(null)}
                       onClick={() => !tourActive && handleRegionClick(region)}
-                      className={`cursor-pointer transition-all duration-500 ${mapVisible ? 'opacity-100' : 'opacity-0'}`}
+                      onKeyDown={(e) => !tourActive && handleRegionKeyPress(e, region)}
+                      tabIndex={0}
+                      role="button"
+                      aria-label={`${region.name}, ${region.risk_level} risk, tap to view details`}
+                      className={`cursor-pointer transition-all duration-500 ${mapVisible ? 'opacity-100' : 'opacity-0'} focus:outline-none`}
                       style={{ transitionDelay: `${400 + idx * 100}ms` }}
                     >
+                      <circle
+                        cx={region.position.x}
+                        cy={region.position.y}
+                        r="10"
+                        fill="transparent"
+                        pointerEvents="all"
+                        className="cursor-pointer"
+                      />
                       {focusedRegion?.name === region.name && (
                         <>
                           <circle
@@ -343,30 +381,6 @@ export function ScamHotspotMap() {
                 </div>
               </div>
 
-              {/* Selected Region Info */}
-              {selectedRegion && (
-                <Alert className="bg-[#F5E8DC] border-[#E6B7BE]">
-                  <MapPin className="h-4 w-4 text-[#5B3256]" />
-                  <AlertDescription className="text-[#5B3256]">
-                    <div className="font-semibold mb-2 text-sm">{selectedRegion.name}</div>
-                    <div className="flex flex-wrap gap-1.5 mb-2">
-                      {selectedRegion.codes.slice(0, 3).map((code, idx) => (
-                        <Badge key={idx} className={`${getRiskBadgeClass(selectedRegion.risk_level)} text-xs`}>
-                          {code}
-                        </Badge>
-                      ))}
-                      {selectedRegion.codes.length > 3 && (
-                        <Badge className="bg-gray-500 text-white text-xs">
-                          +{selectedRegion.codes.length - 3} more
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="text-xs">
-                      Risk: <Badge className={`${getRiskBadgeClass(selectedRegion.risk_level)} text-xs`}>{selectedRegion.risk_level}</Badge>
-                    </div>
-                  </AlertDescription>
-                </Alert>
-              )}
             </div>
 
             {/* Right: Number Origin Finder */}
@@ -621,6 +635,80 @@ export function ScamHotspotMap() {
           </div>
         </div>
       </div>
+
+      {/* Mobile-Friendly Sliding Bottom Sheet for Region Details */}
+      {showDetailPanel && selectedRegion && (
+        <>
+          <div 
+            className="fixed inset-0 bg-black/50 z-40 md:hidden"
+            onClick={closeDetailPanel}
+            aria-hidden="true"
+          />
+          <div 
+            className={`fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl z-50 md:hidden transition-transform duration-300 ${
+              showDetailPanel ? 'translate-y-0' : 'translate-y-full'
+            }`}
+          >
+            <div className="p-6">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-5 w-5 text-[#5B3256]" />
+                  <h3 className="text-lg font-bold text-[#5B3256]">{selectedRegion.name}</h3>
+                </div>
+                <button
+                  onClick={closeDetailPanel}
+                  className="text-[#5B3256] hover:bg-[#F5E8DC] p-2 rounded-full transition-colors"
+                  aria-label="Close details"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              <div className="space-y-3">
+                <div>
+                  <div className="text-sm font-semibold text-[#5B3256] mb-2">Risk Level</div>
+                  <Badge className={`${getRiskBadgeClass(selectedRegion.risk_level)} text-sm px-3 py-1`}>
+                    {selectedRegion.risk_level}
+                  </Badge>
+                </div>
+                
+                <div>
+                  <div className="text-sm font-semibold text-[#5B3256] mb-2">Country Codes</div>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedRegion.codes.map((code, idx) => (
+                      <Badge key={idx} variant="outline" className="text-sm border-[#E6B7BE] text-[#5B3256]">
+                        {code}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+                
+                <div className="bg-[#F5E8DC] p-3 rounded-lg">
+                  <div className="text-xs font-semibold text-[#5B3256] mb-1">⚠️ Safety Tip</div>
+                  <p className="text-xs text-[#5B3256]/80">
+                    {selectedRegion.risk_level === 'Extreme' 
+                      ? 'This region has extremely high romance scam activity. Exercise extreme caution with contacts claiming to be from this area.'
+                      : selectedRegion.risk_level === 'High'
+                      ? 'This region shows elevated romance scam patterns. Verify identity thoroughly before sharing personal information.'
+                      : 'While risk is moderate, always verify identity and never send money to online contacts.'}
+                  </p>
+                </div>
+                
+                <button
+                  onClick={() => {
+                    checkPhoneNumber(selectedRegion.codes[0])
+                    closeDetailPanel()
+                  }}
+                  className="w-full bg-[#5B3256] hover:bg-[#5B3256]/90 text-white py-2 px-4 rounded-lg font-semibold flex items-center justify-center gap-2 transition-colors"
+                >
+                  <Search className="h-4 w-4" />
+                  Run Risk Check
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }
