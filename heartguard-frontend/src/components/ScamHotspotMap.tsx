@@ -242,7 +242,7 @@ export function ScamHotspotMap() {
                     y="0" 
                     width="100" 
                     height="70" 
-                    opacity="0.35"
+                    opacity="0.24"
                     preserveAspectRatio="xMidYMid slice"
                   />
                   
@@ -339,9 +339,12 @@ export function ScamHotspotMap() {
                         y={region.position.y - 5}
                         fontSize={hoveredRegion?.name === region.name || focusedRegion?.name === region.name ? "3.2" : "2.5"}
                         fill="#0F172A"
+                        stroke="white"
+                        strokeWidth="0.22"
+                        paintOrder="stroke"
+                        fontWeight="700"
                         textAnchor="middle"
-                        className="pointer-events-none font-bold transition-all duration-500"
-                        style={{ textShadow: '0 0 4px white, 0 0 3px white, 0 0 2px white' }}
+                        className="pointer-events-none transition-all duration-500"
                       >
                         {region.name}
                       </text>

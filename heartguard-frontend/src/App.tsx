@@ -359,20 +359,21 @@ Please send me $500 right now via crypto!`
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#5B3256] via-[#3C4B7C] to-[#E6B7BE] parallax-bg" style={{ fontFamily: "'Source Sans Pro', sans-serif" }}>
-      <div className="container mx-auto px-4 py-8 max-w-6xl">
+    <div className="relative min-h-screen bg-gradient-to-br from-[#5B3256] via-[#3C4B7C] to-[#E6B7BE] parallax-bg" style={{ fontFamily: "'Source Sans Pro', sans-serif" }}>
+      <div className="pointer-events-none fixed inset-0 bg-black/20 z-0"></div>
+      <div className="relative z-10 container mx-auto px-4 py-8 max-w-6xl">
         <div className="text-center mb-8 animate-fade-in">
           <div className="flex items-center justify-center mb-4">
             <Shield className="w-16 h-16 text-[#E6B7BE] mr-3" />
-            <h1 className="text-5xl font-bold text-white" style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 700 }}>HeartGuard™</h1>
+            <h1 className="text-5xl font-bold text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.6)]" style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 700 }}>HeartGuard™</h1>
           </div>
-          <p className="text-sm text-[#E6B7BE] italic mb-3" style={{ fontFamily: "'Source Sans Pro', sans-serif" }}>
+          <p className="text-sm text-[#E6B7BE] italic mb-3 drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)]" style={{ fontFamily: "'Source Sans Pro', sans-serif" }}>
             Healing begins with truth.
           </p>
-          <p className="text-xl text-[#F5E8DC] font-semibold mb-2">
+          <p className="text-xl text-[#F5E8DC] font-semibold mb-2 drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)]">
             Your heart deserves clarity, confidence, and care.
           </p>
-          <p className="text-[#F5E8DC] text-lg opacity-90">
+          <p className="text-[#F5E8DC] text-lg opacity-90 drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)]">
             AI-powered emotional intelligence for safer online connections
           </p>
           {!report && !loading && (
