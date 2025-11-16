@@ -650,6 +650,7 @@ async def generate_trust_score(
     profile_id: Optional[str] = Form(None),
     phone_number: Optional[str] = Form(None),
     scammer_profile_json: Optional[str] = Form(None),
+    conversation_id: Optional[str] = Form(None),
     db: Session = Depends(get_db)
 ):
     photo_analysis = None
@@ -691,14 +692,41 @@ async def generate_trust_score(
         
         if messages_list:
             phone_code = normalize_phone_number(phone_number) if phone_number else None
-            conversation = DBConversation(id=str(uuid.uuid4()), phone_code=phone_code)
-            db.add(conversation)
-            db.flush()
             
-            prev_final_score = calculate_trust_score(photo_analysis, None, metadata_analysis)[0]
-            prev_toneshift_contrib = 50
+            if conversation_id:
+                conversation = db.query(DBConversation).filter(DBConversation.id == conversation_id).first()
+                if not conversation:
+                    raise HTTPException(status_code=404, detail=f"Conversation {conversation_id} not found")
+                
+                last_point = db.query(DBAnalysisPoint).filter(
+                    DBAnalysisPoint.conversation_id == conversation_id
+                ).order_by(DBAnalysisPoint.message_index.desc()).first()
+                
+                starting_index = (last_point.message_index + 1) if last_point else 1
+                
+                all_previous_points = db.query(DBAnalysisPoint).filter(
+                    DBAnalysisPoint.conversation_id == conversation_id
+                ).order_by(DBAnalysisPoint.message_index).all()
+                
+                prev_final_score = conversation.final_trust_score if conversation.final_trust_score else 50
+                
+                if all_previous_points:
+                    last_messages = [{"sender": "user", "text": p.message_text} for p in all_previous_points]
+                    last_analysis = toneshift_engine.analyze_conversation(last_messages)
+                    prev_toneshift_contrib = round(int((1 - last_analysis["emotional_manipulation_index"]) * 100) * 0.50)
+                else:
+                    prev_toneshift_contrib = 50
+            else:
+                # Create new conversation
+                conversation = DBConversation(id=str(uuid.uuid4()), phone_code=phone_code)
+                db.add(conversation)
+                db.flush()
+                
+                starting_index = 1
+                prev_final_score = calculate_trust_score(photo_analysis, None, metadata_analysis)[0]
+                prev_toneshift_contrib = 50
             
-            for i, msg_text in enumerate(messages_list, start=1):
+            for i, msg_text in enumerate(messages_list, start=starting_index):
                 messages_prefix = [{"sender": "user", "text": m} for m in messages_list[:i]]
                 analysis_i = toneshift_engine.analyze_conversation(messages_prefix)
                 
@@ -844,30 +872,63 @@ async def generate_trust_score(
             profile_data = json.loads(scammer_profile_json)
             profile_input = ScammerProfileInput(**profile_data)
             
-            scammer_profile = DBScammerProfile(
-                id=str(uuid.uuid4()),
-                conversation_id=conversation.id,
-                claimed_name=profile_input.claimed_name,
-                aliases=profile_input.aliases,
-                claimed_dob=profile_input.claimed_dob,
-                claimed_address=profile_input.claimed_address,
-                claimed_occupation=profile_input.claimed_occupation,
-                phone_numbers=profile_input.phone_numbers,
-                email_addresses=profile_input.email_addresses,
-                platform_met=profile_input.platform_met,
-                first_contact_date=profile_input.first_contact_date,
-                last_contact_date=profile_input.last_contact_date,
-                communication_channels=profile_input.communication_channels,
-                total_amount_requested=profile_input.total_amount_requested,
-                total_amount_sent=profile_input.total_amount_sent,
-                currency=profile_input.currency,
-                victim_narrative=profile_input.victim_narrative,
-                ic3_complaint_number=profile_input.ic3_complaint_number,
-                ftc_report_id=profile_input.ftc_report_id,
-                police_incident_number=profile_input.police_incident_number,
-                other_agency_references=profile_input.other_agency_references
-            )
-            db.add(scammer_profile)
+            scammer_profile = db.query(DBScammerProfile).filter(
+                DBScammerProfile.conversation_id == conversation.id
+            ).first()
+            
+            if scammer_profile:
+                scammer_profile.claimed_name = profile_input.claimed_name
+                scammer_profile.aliases = profile_input.aliases
+                scammer_profile.claimed_dob = profile_input.claimed_dob
+                scammer_profile.claimed_address = profile_input.claimed_address
+                scammer_profile.claimed_occupation = profile_input.claimed_occupation
+                scammer_profile.phone_numbers = profile_input.phone_numbers
+                scammer_profile.email_addresses = profile_input.email_addresses
+                scammer_profile.platform_met = profile_input.platform_met
+                scammer_profile.first_contact_date = profile_input.first_contact_date
+                scammer_profile.last_contact_date = profile_input.last_contact_date
+                scammer_profile.communication_channels = profile_input.communication_channels
+                scammer_profile.total_amount_requested = profile_input.total_amount_requested
+                scammer_profile.total_amount_sent = profile_input.total_amount_sent
+                scammer_profile.currency = profile_input.currency
+                scammer_profile.victim_narrative = profile_input.victim_narrative
+                scammer_profile.ic3_complaint_number = profile_input.ic3_complaint_number
+                scammer_profile.ftc_report_id = profile_input.ftc_report_id
+                scammer_profile.police_incident_number = profile_input.police_incident_number
+                scammer_profile.other_agency_references = profile_input.other_agency_references
+                
+                db.query(DBSocialHandle).filter(
+                    DBSocialHandle.scammer_profile_id == scammer_profile.id
+                ).delete()
+                db.query(DBPaymentInstruction).filter(
+                    DBPaymentInstruction.scammer_profile_id == scammer_profile.id
+                ).delete()
+            else:
+                scammer_profile = DBScammerProfile(
+                    id=str(uuid.uuid4()),
+                    conversation_id=conversation.id,
+                    claimed_name=profile_input.claimed_name,
+                    aliases=profile_input.aliases,
+                    claimed_dob=profile_input.claimed_dob,
+                    claimed_address=profile_input.claimed_address,
+                    claimed_occupation=profile_input.claimed_occupation,
+                    phone_numbers=profile_input.phone_numbers,
+                    email_addresses=profile_input.email_addresses,
+                    platform_met=profile_input.platform_met,
+                    first_contact_date=profile_input.first_contact_date,
+                    last_contact_date=profile_input.last_contact_date,
+                    communication_channels=profile_input.communication_channels,
+                    total_amount_requested=profile_input.total_amount_requested,
+                    total_amount_sent=profile_input.total_amount_sent,
+                    currency=profile_input.currency,
+                    victim_narrative=profile_input.victim_narrative,
+                    ic3_complaint_number=profile_input.ic3_complaint_number,
+                    ftc_report_id=profile_input.ftc_report_id,
+                    police_incident_number=profile_input.police_incident_number,
+                    other_agency_references=profile_input.other_agency_references
+                )
+                db.add(scammer_profile)
+            
             db.flush()
             
             if profile_input.social_handles:

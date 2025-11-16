@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import './App.css'
-import { Shield, Upload, MessageSquare, AlertTriangle, CheckCircle, XCircle, Heart, TrendingUp, Globe, Download, ExternalLink } from 'lucide-react'
+import { Shield, Upload, MessageSquare, AlertTriangle, CheckCircle, XCircle, Heart, TrendingUp, Globe, Download, ExternalLink, Users, Search, Archive, ChevronLeft, ChevronRight, Plus, RotateCcw } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -89,6 +89,31 @@ interface SafetyReply {
   priority: number
 }
 
+interface PersonData {
+  personKey: string
+  displayName: string
+  hint?: string
+  archived: boolean
+  createdAt: string
+  updatedAt: string
+  lastConversationId?: string
+  conversationIds: string[]
+  lastScore?: number
+}
+
+interface ConversationMetadata {
+  personKey: string
+  title: string
+  createdAt: string
+  updatedAt: string
+  lastScore?: number
+}
+
+interface PeopleStorage {
+  people: Record<string, PersonData>
+  conversations: Record<string, ConversationMetadata>
+}
+
 function App() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [chatMessages, setChatMessages] = useState('')
@@ -110,6 +135,113 @@ function App() {
   const [scammerEmail, setScammerEmail] = useState('')
   const [victimNarrative, setVictimNarrative] = useState('')
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  
+  const [peopleStorage, setPeopleStorage] = useState<PeopleStorage>({ people: {}, conversations: {} })
+  const [currentPersonKey, setCurrentPersonKey] = useState<string | null>(null)
+  const [newPersonName, setNewPersonName] = useState('')
+  const [newPersonHint, setNewPersonHint] = useState('')
+  const [isNewPerson, setIsNewPerson] = useState(true)
+  const [continueSession, setContinueSession] = useState(false)
+  const [showConversationList, setShowConversationList] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [showArchived, setShowArchived] = useState(false)
+
+  useEffect(() => {
+    const stored = localStorage.getItem('heartguard_people')
+    if (stored) {
+      try {
+        setPeopleStorage(JSON.parse(stored))
+      } catch (e) {
+        console.error('Failed to load people storage:', e)
+      }
+    }
+  }, [])
+
+  const savePeopleStorage = (storage: PeopleStorage) => {
+    setPeopleStorage(storage)
+    localStorage.setItem('heartguard_people', JSON.stringify(storage))
+  }
+
+  const createPersonKey = (name: string, hint?: string): string => {
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+    const hintSlug = hint ? `-${hint.toLowerCase().replace(/[^a-z0-9]+/g, '-')}` : ''
+    return `${slug}${hintSlug}`
+  }
+
+  const addOrUpdatePerson = (conversationId: string, score: number) => {
+    const now = new Date().toISOString()
+    const personName = newPersonName.trim() || scammerName.trim() || 'Unknown'
+    const personKey = isNewPerson ? createPersonKey(personName, newPersonHint) : currentPersonKey!
+    
+    const updatedStorage = { ...peopleStorage }
+    
+    if (isNewPerson || !updatedStorage.people[personKey]) {
+      updatedStorage.people[personKey] = {
+        personKey,
+        displayName: personName,
+        hint: newPersonHint || undefined,
+        archived: false,
+        createdAt: now,
+        updatedAt: now,
+        lastConversationId: conversationId,
+        conversationIds: [conversationId],
+        lastScore: score
+      }
+    } else {
+      const person = updatedStorage.people[personKey]
+      person.updatedAt = now
+      person.lastConversationId = conversationId
+      person.lastScore = score
+      if (!person.conversationIds.includes(conversationId)) {
+        person.conversationIds.push(conversationId)
+      }
+    }
+    
+    updatedStorage.conversations[conversationId] = {
+      personKey,
+      title: `${personName} - ${new Date().toLocaleDateString()}`,
+      createdAt: now,
+      updatedAt: now,
+      lastScore: score
+    }
+    
+    savePeopleStorage(updatedStorage)
+    setCurrentPersonKey(personKey)
+  }
+
+  const loadPerson = (personKey: string) => {
+    const person = peopleStorage.people[personKey]
+    if (person) {
+      setCurrentPersonKey(personKey)
+      setNewPersonName(person.displayName)
+      setNewPersonHint(person.hint || '')
+      setIsNewPerson(false)
+      setContinueSession(true)
+      setScammerName(person.displayName)
+    }
+  }
+
+  const toggleArchivePerson = (personKey: string) => {
+    const updatedStorage = { ...peopleStorage }
+    if (updatedStorage.people[personKey]) {
+      updatedStorage.people[personKey].archived = !updatedStorage.people[personKey].archived
+      savePeopleStorage(updatedStorage)
+    }
+  }
+
+  const getFilteredPeople = () => {
+    return Object.values(peopleStorage.people)
+      .filter(person => {
+        if (!showArchived && person.archived) return false
+        if (searchQuery) {
+          const query = searchQuery.toLowerCase()
+          return person.displayName.toLowerCase().includes(query) || 
+                 person.hint?.toLowerCase().includes(query)
+        }
+        return true
+      })
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+  }
 
   useEffect(() => {
     if (report) {
@@ -218,6 +350,11 @@ Please send me $500 right now via crypto!`
       setError('Please upload a photo or enter chat messages to analyze')
       return
     }
+    
+    if (isNewPerson && !newPersonName.trim() && !scammerName.trim()) {
+      setError('Please enter a name for the person you\'re analyzing')
+      return
+    }
 
     setLoading(true)
     setError(null)
@@ -232,14 +369,20 @@ Please send me $500 right now via crypto!`
         formData.append('chat_messages', chatMessages)
       }
       
-      if (scammerName || scammerPhone || scammerEmail || victimNarrative) {
+      const personName = newPersonName.trim() || scammerName.trim() || 'Unknown'
+      
+      if (personName || scammerPhone || scammerEmail || victimNarrative) {
         const scammerProfile = {
-          claimed_name: scammerName || null,
+          claimed_name: personName,
           phone_numbers: scammerPhone ? [scammerPhone] : null,
           email_addresses: scammerEmail ? [scammerEmail] : null,
           victim_narrative: victimNarrative || null
         }
         formData.append('scammer_profile_json', JSON.stringify(scammerProfile))
+      }
+      
+      if (continueSession && currentPersonKey && peopleStorage.people[currentPersonKey]?.lastConversationId) {
+        formData.append('conversation_id', peopleStorage.people[currentPersonKey].lastConversationId!)
       }
 
       const response = await fetch(`${API_URL}/trustscore/generate`, {
@@ -253,6 +396,10 @@ Please send me $500 right now via crypto!`
 
       const data = await response.json()
       setReport(data)
+      
+      if (data.conversation_id) {
+        addOrUpdatePerson(data.conversation_id, data.trust_score)
+      }
       
       if (data.conversation_id) {
         try {
@@ -397,6 +544,258 @@ Please send me $500 right now via crypto!`
             </div>
           )}
         </div>
+
+        {/* Conversation Management Section */}
+        {!report && !showHotspotMap && (
+          <div className="mb-6 animate-fade-in">
+            <Card className="bg-white/95 border-[#3C4B7C] border-2 rounded-xl shadow-lg">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center text-[#5B3256]" style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 700 }}>
+                      <Users className="mr-2 text-[#3C4B7C]" />
+                      Person You're Analyzing
+                    </CardTitle>
+                    <CardDescription className="text-[#5B3256]/70">
+                      Keep conversations separate for each person (e.g., Larry, John)
+                    </CardDescription>
+                  </div>
+                  <Button
+                    onClick={() => setShowConversationList(!showConversationList)}
+                    variant="outline"
+                    className="border-[#3C4B7C] text-[#3C4B7C]"
+                  >
+                    <Users className="mr-2 h-4 w-4" />
+                    {showConversationList ? 'Hide' : 'View'} All People ({Object.keys(peopleStorage.people).length})
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* New/Existing Person Toggle */}
+                <div className="flex gap-2 p-1 bg-[#F5E8DC] rounded-xl">
+                  <button
+                    onClick={() => {
+                      setIsNewPerson(true)
+                      setCurrentPersonKey(null)
+                      setNewPersonName('')
+                      setNewPersonHint('')
+                      setContinueSession(false)
+                    }}
+                    className={`flex-1 px-4 py-2 rounded-lg font-semibold transition-all ${
+                      isNewPerson 
+                        ? 'bg-[#3C4B7C] text-white shadow-md' 
+                        : 'text-[#5B3256] hover:bg-white/50'
+                    }`}
+                  >
+                    <Plus className="inline mr-2 h-4 w-4" />
+                    New Person
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsNewPerson(false)
+                      setContinueSession(true)
+                    }}
+                    className={`flex-1 px-4 py-2 rounded-lg font-semibold transition-all ${
+                      !isNewPerson 
+                        ? 'bg-[#3C4B7C] text-white shadow-md' 
+                        : 'text-[#5B3256] hover:bg-white/50'
+                    }`}
+                  >
+                    <RotateCcw className="inline mr-2 h-4 w-4" />
+                    Existing Person
+                  </button>
+                </div>
+
+                {/* New Person Form */}
+                {isNewPerson && (
+                  <div className="space-y-3 animate-fade-in">
+                    <div>
+                      <label className="block text-sm font-semibold text-[#5B3256] mb-2">
+                        Person's Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={newPersonName}
+                        onChange={(e) => {
+                          setNewPersonName(e.target.value)
+                          setScammerName(e.target.value)
+                        }}
+                        placeholder="e.g., Larry, John"
+                        className="w-full px-4 py-2 bg-[#F5E8DC] border-[#3C4B7C] border-2 rounded-xl text-[#5B3256] placeholder:text-[#5B3256]/50"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-[#5B3256] mb-2">
+                        Hint (Optional - helps avoid confusion)
+                      </label>
+                      <input
+                        type="text"
+                        value={newPersonHint}
+                        onChange={(e) => setNewPersonHint(e.target.value)}
+                        placeholder="e.g., Tinder, +234-xxx, Bumble"
+                        className="w-full px-4 py-2 bg-[#F5E8DC] border-[#3C4B7C] border-2 rounded-xl text-[#5B3256] placeholder:text-[#5B3256]/50"
+                      />
+                      <p className="text-xs text-[#5B3256]/60 mt-1">
+                        Add platform or phone last 4 digits to distinguish between multiple people with same name
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Existing Person Selector */}
+                {!isNewPerson && (
+                  <div className="space-y-3 animate-fade-in">
+                    <div>
+                      <label className="block text-sm font-semibold text-[#5B3256] mb-2">
+                        Select Person
+                      </label>
+                      <select
+                        value={currentPersonKey || ''}
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            loadPerson(e.target.value)
+                          }
+                        }}
+                        className="w-full px-4 py-2 bg-[#F5E8DC] border-[#3C4B7C] border-2 rounded-xl text-[#5B3256]"
+                      >
+                        <option value="">Choose a person...</option>
+                        {getFilteredPeople().map(person => (
+                          <option key={person.personKey} value={person.personKey}>
+                            {person.displayName} {person.hint ? `(${person.hint})` : ''} - Score: {person.lastScore || 'N/A'}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    
+                    {currentPersonKey && (
+                      <div className="flex gap-2 p-1 bg-[#F5E8DC] rounded-xl">
+                        <button
+                          onClick={() => setContinueSession(false)}
+                          className={`flex-1 px-4 py-2 rounded-lg font-semibold transition-all ${
+                            !continueSession 
+                              ? 'bg-[#E6B7BE] text-[#5B3256] shadow-md' 
+                              : 'text-[#5B3256] hover:bg-white/50'
+                          }`}
+                        >
+                          New Session
+                        </button>
+                        <button
+                          onClick={() => setContinueSession(true)}
+                          className={`flex-1 px-4 py-2 rounded-lg font-semibold transition-all ${
+                            continueSession 
+                              ? 'bg-[#E6B7BE] text-[#5B3256] shadow-md' 
+                              : 'text-[#5B3256] hover:bg-white/50'
+                          }`}
+                        >
+                          Continue Last Session
+                        </button>
+                      </div>
+                    )}
+                    
+                    {currentPersonKey && continueSession && (
+                      <Alert className="bg-blue-50 border-blue-300">
+                        <AlertDescription className="text-sm text-blue-900">
+                          Paste only NEW messages to continue the conversation. Previous messages are already analyzed.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                  </div>
+                )}
+
+                {/* Conversation List Sidebar */}
+                {showConversationList && (
+                  <div className="border-t-2 border-[#E6B7BE] pt-4 animate-fade-in">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-semibold text-[#5B3256]">All People</h3>
+                      <div className="flex gap-2">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[#5B3256]/50" />
+                          <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Search..."
+                            className="pl-9 pr-3 py-1 text-sm bg-[#F5E8DC] border-[#3C4B7C] border rounded-lg text-[#5B3256]"
+                          />
+                        </div>
+                        <Button
+                          onClick={() => setShowArchived(!showArchived)}
+                          variant="outline"
+                          size="sm"
+                          className="border-[#5B3256] text-[#5B3256]"
+                        >
+                          <Archive className="mr-1 h-3 w-3" />
+                          {showArchived ? 'Hide' : 'Show'} Archived
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                      {getFilteredPeople().length === 0 ? (
+                        <p className="text-center text-[#5B3256]/60 py-4">
+                          {searchQuery ? 'No people found matching your search' : 'No people tracked yet'}
+                        </p>
+                      ) : (
+                        getFilteredPeople().map(person => (
+                          <div
+                            key={person.personKey}
+                            className={`p-3 rounded-lg border-2 transition-all cursor-pointer ${
+                              currentPersonKey === person.personKey
+                                ? 'bg-[#3C4B7C]/10 border-[#3C4B7C]'
+                                : 'bg-[#F5E8DC] border-[#E6B7BE] hover:border-[#3C4B7C]'
+                            } ${person.archived ? 'opacity-60' : ''}`}
+                            onClick={() => {
+                              loadPerson(person.personKey)
+                              setIsNewPerson(false)
+                            }}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-semibold text-[#5B3256]">
+                                    {person.displayName}
+                                  </span>
+                                  {person.hint && (
+                                    <span className="text-xs text-[#5B3256]/60">
+                                      ({person.hint})
+                                    </span>
+                                  )}
+                                  {person.archived && (
+                                    <Badge variant="outline" className="text-xs">
+                                      Archived
+                                    </Badge>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-3 mt-1 text-xs text-[#5B3256]/70">
+                                  <span>Score: {person.lastScore || 'N/A'}</span>
+                                  <span>•</span>
+                                  <span>{new Date(person.updatedAt).toLocaleDateString()}</span>
+                                  <span>•</span>
+                                  <span>{person.conversationIds.length} session(s)</span>
+                                </div>
+                              </div>
+                              <Button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  toggleArchivePerson(person.personKey)
+                                }}
+                                variant="ghost"
+                                size="sm"
+                                className="text-[#5B3256]"
+                              >
+                                <Archive className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Scam Hotspot Map Section */}
         {showHotspotMap && !report && (
