@@ -69,8 +69,10 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_event():
+    from app.models.database import populate_safety_replies
     init_db()
     populate_geographic_risks()
+    populate_safety_replies()
 
 class ChatAnalysisRequest(BaseModel):
     messages: List[str]
@@ -1024,6 +1026,8 @@ async def generate_evidence_report(
     Returns:
         StreamingResponse with PDF file
     """
+    from app.models.database import Conversation as DBConversation, AnalysisPoint as DBAnalysisPoint, EvidenceReport as DBEvidenceReport
+    
     conversation = db.query(DBConversation).filter(DBConversation.id == conversation_id).first()
     
     if not conversation:
@@ -1034,13 +1038,34 @@ async def generate_evidence_report(
     ).order_by(DBAnalysisPoint.message_index.asc()).all()
     
     geographic_risk = None
-    if phone_code:
-        normalized_code = normalize_phone_number(phone_code)
+    phone_code_to_use = phone_code or conversation.phone_code
+    
+    if phone_code_to_use:
+        normalized_code = normalize_phone_number(phone_code_to_use)
         geographic_risk = db.query(GeographicRisk).filter(
             GeographicRisk.code == normalized_code
         ).first()
     
-    pdf_buffer = generate_evidence_pdf(conversation, analysis_points, geographic_risk)
+    app_version = os.getenv("APP_VERSION", "1.0.0")
+    backend_version = os.getenv("BACKEND_VERSION", "1.0.0")
+    
+    pdf_buffer, dataset_hash, report_data = generate_evidence_pdf(
+        conversation, 
+        analysis_points, 
+        geographic_risk,
+        app_version,
+        backend_version
+    )
+    
+    evidence_report = DBEvidenceReport(
+        conversation_id=conversation_id,
+        dataset_hash=dataset_hash,
+        report_data=report_data,
+        app_version=app_version,
+        backend_version=backend_version
+    )
+    db.add(evidence_report)
+    db.commit()
     
     timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
     filename = f"HeartGuard_Evidence_{conversation_id[:8]}_{timestamp}.pdf"
@@ -1052,3 +1077,89 @@ async def generate_evidence_report(
             "Content-Disposition": f"attachment; filename={filename}"
         }
     )
+
+
+@app.get("/evidence/verify")
+async def verify_evidence_report(hash: str, db: Session = Depends(get_db)):
+    """
+    Verify the authenticity of an Evidence Locker report by its dataset hash.
+    
+    Args:
+        hash: SHA-256 hash of the report dataset
+        db: Database session
+        
+    Returns:
+        Verification result with report metadata
+    """
+    from app.models.database import EvidenceReport as DBEvidenceReport, Conversation as DBConversation
+    
+    evidence_report = db.query(DBEvidenceReport).filter(
+        DBEvidenceReport.dataset_hash == hash
+    ).first()
+    
+    if not evidence_report:
+        return {
+            "valid": False,
+            "message": "No report found with this hash. The report may not exist or the hash is incorrect."
+        }
+    
+    conversation = db.query(DBConversation).filter(
+        DBConversation.id == evidence_report.conversation_id
+    ).first()
+    
+    return {
+        "valid": True,
+        "message": "Report verified successfully. This evidence has not been tampered with.",
+        "report_metadata": {
+            "conversation_id": evidence_report.conversation_id,
+            "generated_at": evidence_report.generated_at.isoformat() + "Z",
+            "total_messages": evidence_report.report_data.get("total_messages"),
+            "final_trust_score": evidence_report.report_data.get("final_trust_score"),
+            "app_version": evidence_report.app_version,
+            "backend_version": evidence_report.backend_version
+        }
+    }
+
+
+@app.get("/safety-replies")
+async def get_safety_replies(
+    trigger_type: Optional[str] = None,
+    risk_level: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Get contextual safety reply suggestions based on risk triggers.
+    
+    Args:
+        trigger_type: Type of trigger (wallet_watch, trust_drop, tone_shift, general)
+        risk_level: Risk level (high, extreme, medium)
+        db: Database session
+        
+    Returns:
+        List of safety reply suggestions
+    """
+    from app.models.database import SafetyReply
+    
+    query = db.query(SafetyReply)
+    
+    if trigger_type:
+        query = query.filter(SafetyReply.trigger_type == trigger_type)
+    
+    if risk_level:
+        query = query.filter(SafetyReply.risk_level == risk_level)
+    
+    safety_replies = query.order_by(SafetyReply.priority.asc()).limit(3).all()
+    
+    return {
+        "safety_replies": [
+            {
+                "id": reply.id,
+                "trigger_type": reply.trigger_type,
+                "risk_level": reply.risk_level,
+                "reply_text": reply.reply_text,
+                "context": reply.context,
+                "priority": reply.priority
+            }
+            for reply in safety_replies
+        ]
+    }

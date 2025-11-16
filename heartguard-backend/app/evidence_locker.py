@@ -10,8 +10,10 @@ import json
 import hashlib
 from typing import Optional, Dict, Any, List
 from sqlalchemy.orm import Session
+import qrcode
+import os
 
-from app.models.database import Conversation, AnalysisPoint, GeographicRisk
+from app.models.database import Conversation, AnalysisPoint, GeographicRisk, EvidenceReport
 
 
 class EvidenceReportPDF(FPDF):
@@ -32,11 +34,17 @@ class EvidenceReportPDF(FPDF):
         self.ln(5)
         
     def footer(self):
-        """PDF footer with page numbers"""
+        """PDF footer with page numbers and verification watermark"""
         self.set_y(-15)
-        self.set_font('Arial', 'I', 8)
+        self.set_font('Arial', 'I', 7)
         self.set_text_color(128, 128, 128)
-        self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
+        self.cell(0, 5, f'Page {self.page_no()}', 0, 1, 'C')
+        
+        if hasattr(self, 'verification_hash'):
+            self.set_font('Arial', 'I', 6)
+            self.set_text_color(100, 100, 100)
+            verify_text = f'Verify at heartguard.app/verify | Hash: {self.verification_hash[:16]}...'
+            self.cell(0, 5, verify_text, 0, 0, 'C')
 
 
 def sanitize_text(text: str, max_length: int = 220) -> str:
@@ -115,18 +123,39 @@ def generate_risk_summary(analysis_points: List[AnalysisPoint]) -> Dict[str, Any
     }
 
 
+def generate_qr_code(data: str, size: int = 100) -> str:
+    """Generate QR code and save to temp file, return file path"""
+    qr = qrcode.QRCode(version=1, box_size=10, border=2)
+    qr.add_data(data)
+    qr.make(fit=True)
+    
+    img = qr.make_image(fill_color="black", back_color="white")
+    
+    temp_path = f"/tmp/qr_{hashlib.md5(data.encode()).hexdigest()}.png"
+    img.save(temp_path)
+    
+    return temp_path
+
+
 def generate_evidence_pdf(
     conversation: Conversation,
     analysis_points: List[AnalysisPoint],
-    geographic_risk: Optional[GeographicRisk] = None
-) -> BytesIO:
-    """Generate complete Evidence Locker PDF report"""
+    geographic_risk: Optional[GeographicRisk] = None,
+    app_version: str = "1.0.0",
+    backend_version: str = "1.0.0"
+) -> tuple[BytesIO, str, Dict[str, Any]]:
+    """Generate complete Evidence Locker PDF report
+    
+    Returns:
+        tuple: (pdf_buffer, dataset_hash, report_data)
+    """
     
     dataset = assemble_report_dataset(conversation, analysis_points, geographic_risk)
     data_hash = compute_dataset_hash(dataset)
     risk_summary = generate_risk_summary(analysis_points)
     
     pdf = EvidenceReportPDF()
+    pdf.verification_hash = data_hash
     pdf.add_page()
     
     pdf.set_font('Arial', 'B', 12)
@@ -298,7 +327,8 @@ def generate_evidence_pdf(
     custody_items = [
         ('Report Generated At:', datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')),
         ('Application:', 'HeartGuard Romance Fraud Detection System'),
-        ('Backend Version:', 'v1.0.0 (SQLAlchemy + FastAPI)'),
+        ('App Version:', f'v{app_version}'),
+        ('Backend Version:', f'v{backend_version} (SQLAlchemy + FastAPI)'),
         ('Database Engine:', 'SQLite'),
         ('Total Analysis Points:', str(len(analysis_points))),
         ('Data Integrity:', 'Verified via cryptographic hash'),
@@ -319,6 +349,28 @@ def generate_evidence_pdf(
     pdf.cell(0, 6, data_hash[64:], 0, 1)
     
     pdf.ln(5)
+    
+    verify_url = f"https://heart-guard-mvp-2.vercel.app/verify?hash={data_hash}"
+    qr_path = generate_qr_code(verify_url)
+    
+    pdf.set_font('Arial', 'B', 10)
+    pdf.set_text_color(91, 50, 86)
+    pdf.cell(0, 8, 'Evidence Verification', 0, 1)
+    pdf.ln(2)
+    
+    pdf.set_font('Arial', '', 8)
+    pdf.set_text_color(0, 0, 0)
+    pdf.multi_cell(0, 5, 
+        'Scan the QR code below or visit heartguard.app/verify to verify this report\'s authenticity. '
+        'The verification system will confirm that this evidence has not been tampered with.'
+    )
+    pdf.ln(3)
+    
+    if os.path.exists(qr_path):
+        pdf.image(qr_path, x=80, w=50)
+        os.remove(qr_path)
+    
+    pdf.ln(5)
     pdf.set_font('Arial', 'I', 8)
     pdf.set_text_color(128, 128, 128)
     pdf.multi_cell(0, 5, 
@@ -331,4 +383,14 @@ def generate_evidence_pdf(
     pdf.output(buffer)
     buffer.seek(0)
     
-    return buffer
+    report_data = {
+        "conversation_id": conversation.id,
+        "dataset_hash": data_hash,
+        "generated_at": datetime.utcnow().isoformat() + "Z",
+        "total_messages": len(analysis_points),
+        "final_trust_score": conversation.final_trust_score,
+        "app_version": app_version,
+        "backend_version": backend_version
+    }
+    
+    return buffer, data_hash, report_data

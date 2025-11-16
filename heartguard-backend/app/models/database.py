@@ -88,8 +88,12 @@ class Conversation(Base):
     start_date = Column(DateTime, default=datetime.utcnow)
     last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     final_trust_score = Column(Integer, nullable=True)
+    phone_code = Column(String, nullable=True)
+    trust_report_id = Column(Integer, ForeignKey("trust_reports.id"), nullable=True)
     
     analysis_points = relationship("AnalysisPoint", back_populates="conversation", cascade="all, delete-orphan")
+    evidence_reports = relationship("EvidenceReport", back_populates="conversation", cascade="all, delete-orphan")
+    trust_report = relationship("TrustReport")
 
 class AnalysisPoint(Base):
     __tablename__ = "analysis_points"
@@ -117,6 +121,29 @@ class GeographicRisk(Base):
     notes = Column(Text, nullable=True)
     category = Column(String, nullable=True)
 
+class EvidenceReport(Base):
+    __tablename__ = "evidence_reports"
+    
+    id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    conversation_id = Column(String, ForeignKey("conversations.id"))
+    dataset_hash = Column(String, unique=True, index=True)
+    generated_at = Column(DateTime, default=datetime.utcnow)
+    report_data = Column(JSON)
+    app_version = Column(String, nullable=True)
+    backend_version = Column(String, nullable=True)
+    
+    conversation = relationship("Conversation", back_populates="evidence_reports")
+
+class SafetyReply(Base):
+    __tablename__ = "safety_replies"
+    
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    trigger_type = Column(String)
+    risk_level = Column(String)
+    reply_text = Column(Text)
+    context = Column(String, nullable=True)
+    priority = Column(Integer, default=1)
+
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./heartguard.db")
 
 engine = create_engine(DATABASE_URL)
@@ -131,6 +158,113 @@ def get_db():
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+
+def populate_safety_replies():
+    """Populate SafetyReply table with contextual safety suggestions"""
+    db = SessionLocal()
+    
+    safety_replies_data = [
+        {
+            "trigger_type": "wallet_watch",
+            "risk_level": "high",
+            "reply_text": "I need to verify your identity through a video call before discussing any financial matters.",
+            "context": "financial_request",
+            "priority": 1
+        },
+        {
+            "trigger_type": "wallet_watch",
+            "risk_level": "high",
+            "reply_text": "I don't send money to people I haven't met in person. Can we meet first?",
+            "context": "financial_request",
+            "priority": 2
+        },
+        {
+            "trigger_type": "wallet_watch",
+            "risk_level": "high",
+            "reply_text": "I'm not comfortable with this request. Let's take things slower.",
+            "context": "financial_request",
+            "priority": 3
+        },
+        
+        {
+            "trigger_type": "trust_drop",
+            "risk_level": "high",
+            "reply_text": "I've noticed some inconsistencies in what you've told me. Can you clarify?",
+            "context": "inconsistency_detected",
+            "priority": 1
+        },
+        {
+            "trigger_type": "trust_drop",
+            "risk_level": "high",
+            "reply_text": "I need some time to think about our conversation. Let's talk later.",
+            "context": "inconsistency_detected",
+            "priority": 2
+        },
+        
+        {
+            "trigger_type": "tone_shift",
+            "risk_level": "high",
+            "reply_text": "Your tone seems to have changed suddenly. Is everything okay?",
+            "context": "manipulation_detected",
+            "priority": 1
+        },
+        {
+            "trigger_type": "tone_shift",
+            "risk_level": "high",
+            "reply_text": "I'm feeling pressured. I need to take a step back from this conversation.",
+            "context": "manipulation_detected",
+            "priority": 2
+        },
+        
+        {
+            "trigger_type": "wallet_watch",
+            "risk_level": "extreme",
+            "reply_text": "This sounds like an emergency. Have you contacted the proper authorities or your family?",
+            "context": "emergency_claim",
+            "priority": 1
+        },
+        {
+            "trigger_type": "wallet_watch",
+            "risk_level": "extreme",
+            "reply_text": "I can't help with urgent financial requests. Please seek help from official channels.",
+            "context": "emergency_claim",
+            "priority": 2
+        },
+        
+        {
+            "trigger_type": "general",
+            "risk_level": "medium",
+            "reply_text": "I prefer to keep our conversations light until we know each other better.",
+            "context": "boundary_setting",
+            "priority": 1
+        },
+        {
+            "trigger_type": "general",
+            "risk_level": "medium",
+            "reply_text": "Let's verify each other's identities before sharing personal information.",
+            "context": "boundary_setting",
+            "priority": 2
+        }
+    ]
+    
+    try:
+        for reply_data in safety_replies_data:
+            existing = db.query(SafetyReply).filter(
+                SafetyReply.trigger_type == reply_data["trigger_type"],
+                SafetyReply.reply_text == reply_data["reply_text"]
+            ).first()
+            
+            if not existing:
+                safety_reply = SafetyReply(**reply_data)
+                db.add(safety_reply)
+        
+        db.commit()
+        print(f"✅ Populated {len(safety_replies_data)} safety reply suggestions")
+    except Exception as e:
+        db.rollback()
+        print(f"⚠️ Error populating safety replies: {e}")
+    finally:
+        db.close()
 
 def populate_geographic_risks():
     """Populate GeographicRisk table with comprehensive global romance fraud hotspot data.
