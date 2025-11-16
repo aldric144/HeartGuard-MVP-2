@@ -42,6 +42,40 @@ interface TrustScoreReport {
   photo_analysis?: PhotoAnalysis
   chat_analysis?: ChatAnalysis
   created_at: string
+  conversation_id?: string
+}
+
+interface TimelineMessage {
+  message_index: number
+  message_text: string
+  timestamp: string
+  trust_score_delta: number
+  tone_shift_delta: number
+  wallet_watch_flag: boolean
+  risk_rationale: string
+}
+
+interface TimelineData {
+  conversation_id: string
+  final_trust_score: number
+  start_date: string
+  last_updated: string
+  message_count: number
+  messages: TimelineMessage[]
+}
+
+interface PatternAnalytics {
+  total_conversations: number
+  high_risk_conversations: number
+  average_trust_score: number
+  most_common_patterns: Array<{ pattern: string; count: number }>
+  financial_request_stats: {
+    total_financial_requests: number
+    conversations_with_financial_requests: number
+    average_message_index: number
+    percentage_of_conversations: number
+  }
+  average_message_count: number
 }
 
 function App() {
@@ -52,6 +86,9 @@ function App() {
   const [error, setError] = useState<string | null>(null)
   const [animatedScore, setAnimatedScore] = useState(0)
   const [demoMode, setDemoMode] = useState(false)
+  const [timeline, setTimeline] = useState<TimelineData | null>(null)
+  const [analytics, setAnalytics] = useState<PatternAnalytics | null>(null)
+  const [showTimeline, setShowTimeline] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
@@ -186,6 +223,28 @@ Please send me $500 right now via crypto!`
 
       const data = await response.json()
       setReport(data)
+      
+      if (data.conversation_id) {
+        try {
+          const timelineResponse = await fetch(`${API_URL}/timeline/${data.conversation_id}`)
+          if (timelineResponse.ok) {
+            const timelineData = await timelineResponse.json()
+            setTimeline(timelineData)
+          }
+        } catch (err) {
+          console.error('Failed to fetch timeline:', err)
+        }
+      }
+      
+      try {
+        const analyticsResponse = await fetch(`${API_URL}/analytics/patterns`)
+        if (analyticsResponse.ok) {
+          const analyticsData = await analyticsResponse.json()
+          setAnalytics(analyticsData)
+        }
+      } catch (err) {
+        console.error('Failed to fetch analytics:', err)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
@@ -510,6 +569,226 @@ Please send me $500 right now via crypto!`
               </Card>
             )}
 
+            {timeline && timeline.messages.length > 0 && (
+              <Card className="bg-white/95 border-[#E6B7BE] border-2 rounded-xl shadow-lg">
+                <CardHeader>
+                  <CardTitle className="text-[#5B3256] flex items-center justify-between" style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 700 }}>
+                    <span className="flex items-center">
+                      <TrendingUp className="mr-2" />
+                      Trust Timeline™ - Risk Evolution
+                    </span>
+                    <Button
+                      onClick={() => setShowTimeline(!showTimeline)}
+                      variant="outline"
+                      className="border-[#5B3256] text-[#5B3256]"
+                    >
+                      {showTimeline ? 'Hide' : 'Show'} Timeline
+                    </Button>
+                  </CardTitle>
+                  <CardDescription>
+                    See how the Trust Score changed with each message
+                  </CardDescription>
+                </CardHeader>
+                {showTimeline && (
+                  <CardContent className="space-y-6">
+                    <div className="bg-[#F5E8DC] p-4 rounded-xl">
+                      <h4 className="font-semibold mb-3 text-[#5B3256] text-lg">Trust Score Evolution</h4>
+                      <ResponsiveContainer width="100%" height={250}>
+                        <LineChart data={timeline.messages.map((msg, idx) => {
+                          let cumulativeScore = 82
+                          for (let i = 0; i <= idx; i++) {
+                            cumulativeScore += timeline.messages[i].trust_score_delta
+                          }
+                          return {
+                            message: `Msg ${msg.message_index}`,
+                            score: cumulativeScore,
+                            delta: msg.trust_score_delta
+                          }
+                        })}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#E6B7BE" />
+                          <XAxis dataKey="message" stroke="#5B3256" />
+                          <YAxis stroke="#5B3256" domain={[0, 100]} />
+                          <Tooltip 
+                            contentStyle={{ 
+                              backgroundColor: '#F5E8DC', 
+                              border: '2px solid #E6B7BE',
+                              borderRadius: '12px'
+                            }}
+                          />
+                          <Line 
+                            type="monotone" 
+                            dataKey="score" 
+                            stroke="#5B3256" 
+                            strokeWidth={3}
+                            dot={{ fill: '#5B3256', r: 6 }}
+                            name="Trust Score"
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                      <p className="text-xs text-[#5B3256]/60 mt-2 text-center">
+                        Shows how Trust Score changed after each message was analyzed
+                      </p>
+                    </div>
+
+                    <div>
+                      <h4 className="font-semibold mb-3 text-[#5B3256] text-lg">Per-Message Risk Analysis</h4>
+                      <div className="space-y-3">
+                        {timeline.messages.map((msg) => (
+                          <div 
+                            key={msg.message_index} 
+                            className={`p-4 rounded-xl border-l-4 ${
+                              msg.wallet_watch_flag 
+                                ? 'bg-red-50 border-red-500' 
+                                : msg.trust_score_delta < -10 
+                                  ? 'bg-orange-50 border-orange-500'
+                                  : 'bg-[#F5E8DC] border-[#3C4B7C]'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="font-bold text-[#5B3256]">Message {msg.message_index}</span>
+                                  {msg.wallet_watch_flag && (
+                                    <Badge className="bg-red-600 text-white">
+                                      💰 Financial Request
+                                    </Badge>
+                                  )}
+                                </div>
+                                <p className="text-sm text-[#5B3256]/80 italic mb-2">"{msg.message_text}"</p>
+                              </div>
+                              <div className="text-right ml-4">
+                                <div className={`text-2xl font-bold ${
+                                  msg.trust_score_delta < 0 ? 'text-red-600' : 
+                                  msg.trust_score_delta > 0 ? 'text-green-600' : 
+                                  'text-gray-600'
+                                }`}>
+                                  {msg.trust_score_delta > 0 ? '+' : ''}{msg.trust_score_delta}
+                                </div>
+                                <div className="text-xs text-[#5B3256]/60">Score Change</div>
+                              </div>
+                            </div>
+                            <div className="mt-2 pt-2 border-t border-[#5B3256]/20">
+                              <p className="text-sm text-[#5B3256]">
+                                <strong>Risk Detected:</strong> {msg.risk_rationale}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="bg-[#F5E8DC] p-4 rounded-xl">
+                      <h4 className="font-semibold mb-2 text-[#5B3256]">Timeline Summary</h4>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <p className="text-[#5B3256]/70">Total Messages</p>
+                          <p className="text-xl font-bold text-[#5B3256]">{timeline.message_count}</p>
+                        </div>
+                        <div>
+                          <p className="text-[#5B3256]/70">Final Trust Score</p>
+                          <p className="text-xl font-bold text-[#5B3256]">{timeline.final_trust_score}</p>
+                        </div>
+                        <div>
+                          <p className="text-[#5B3256]/70">Financial Requests</p>
+                          <p className="text-xl font-bold text-red-600">
+                            {timeline.messages.filter(m => m.wallet_watch_flag).length}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[#5B3256]/70">Biggest Drop</p>
+                          <p className="text-xl font-bold text-red-600">
+                            {Math.min(...timeline.messages.map(m => m.trust_score_delta))}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                )}
+              </Card>
+            )}
+
+            {analytics && (
+              <Card className="bg-white/95 border-[#E6B7BE] border-2 rounded-xl shadow-lg">
+                <CardHeader>
+                  <CardTitle className="text-[#5B3256]" style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 700 }}>
+                    Pattern Analytics - Insights Across All Conversations
+                  </CardTitle>
+                  <CardDescription>
+                    Learn from patterns detected across {analytics.total_conversations} analyzed conversations
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="grid md:grid-cols-3 gap-4">
+                    <div className="bg-[#F5E8DC] p-4 rounded-xl">
+                      <p className="text-[#5B3256]/70 text-sm">Total Conversations</p>
+                      <p className="text-3xl font-bold text-[#5B3256]">{analytics.total_conversations}</p>
+                    </div>
+                    <div className="bg-red-50 p-4 rounded-xl">
+                      <p className="text-red-700/70 text-sm">High Risk Detected</p>
+                      <p className="text-3xl font-bold text-red-600">{analytics.high_risk_conversations}</p>
+                    </div>
+                    <div className="bg-[#F5E8DC] p-4 rounded-xl">
+                      <p className="text-[#5B3256]/70 text-sm">Average Trust Score</p>
+                      <p className="text-3xl font-bold text-[#5B3256]">{analytics.average_trust_score}</p>
+                    </div>
+                  </div>
+
+                  {analytics.most_common_patterns.length > 0 && (
+                    <div className="bg-[#F5E8DC] p-4 rounded-xl">
+                      <h4 className="font-semibold mb-3 text-[#5B3256] text-lg">Most Common Scam Patterns</h4>
+                      <div className="space-y-2">
+                        {analytics.most_common_patterns.slice(0, 5).map((pattern, idx) => (
+                          <div key={idx} className="flex items-center justify-between">
+                            <span className="text-[#5B3256]">{pattern.pattern}</span>
+                            <Badge className="bg-[#5B3256] text-white">{pattern.count} times</Badge>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="bg-red-50 p-4 rounded-xl border-2 border-red-200">
+                    <h4 className="font-semibold mb-3 text-red-700 text-lg flex items-center">
+                      <AlertTriangle className="mr-2" />
+                      Financial Request Statistics
+                    </h4>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <p className="text-red-700/70">Total Requests</p>
+                        <p className="text-2xl font-bold text-red-600">
+                          {analytics.financial_request_stats.total_financial_requests}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-red-700/70">Conversations Affected</p>
+                        <p className="text-2xl font-bold text-red-600">
+                          {analytics.financial_request_stats.percentage_of_conversations}%
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-red-700/70">Avg Message Index</p>
+                        <p className="text-2xl font-bold text-red-600">
+                          Message {analytics.financial_request_stats.average_message_index}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-red-700/70">Avg Messages/Convo</p>
+                        <p className="text-2xl font-bold text-red-600">
+                          {analytics.average_message_count}
+                        </p>
+                      </div>
+                    </div>
+                    <Alert className="mt-4 bg-red-100 border-red-300">
+                      <AlertDescription className="text-red-800 text-sm">
+                        <strong>Pattern Insight:</strong> Financial requests typically appear around message {analytics.financial_request_stats.average_message_index}, 
+                        affecting {analytics.financial_request_stats.percentage_of_conversations}% of analyzed conversations.
+                      </AlertDescription>
+                    </Alert>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             <div className="text-center">
               <Button
                 onClick={() => {
@@ -517,6 +796,9 @@ Please send me $500 right now via crypto!`
                   setSelectedFile(null)
                   setChatMessages('')
                   setError(null)
+                  setTimeline(null)
+                  setAnalytics(null)
+                  setShowTimeline(false)
                 }}
                 className="bg-[#3C4B7C] hover:bg-[#3C4B7C]/90 text-white px-8 py-4 text-lg rounded-xl shadow-lg"
                 style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 700 }}

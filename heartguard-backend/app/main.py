@@ -84,6 +84,32 @@ class TrustScoreReport(BaseModel):
     photo_analysis: Optional[PhotoAnalysisResponse] = None
     chat_analysis: Optional[ChatAnalysisResponse] = None
     created_at: str
+    conversation_id: Optional[str] = None
+
+class TimelineMessage(BaseModel):
+    message_index: int
+    message_text: str
+    timestamp: str
+    trust_score_delta: int
+    tone_shift_delta: int
+    wallet_watch_flag: bool
+    risk_rationale: str
+
+class TimelineResponse(BaseModel):
+    conversation_id: str
+    final_trust_score: int
+    start_date: str
+    last_updated: str
+    message_count: int
+    messages: List[TimelineMessage]
+
+class PatternAnalytics(BaseModel):
+    total_conversations: int
+    high_risk_conversations: int
+    average_trust_score: float
+    most_common_patterns: List[dict]
+    financial_request_stats: dict
+    average_message_count: float
 
 def detect_deepfake(image_data: bytes) -> tuple[str, List[str]]:
     try:
@@ -690,7 +716,8 @@ async def generate_trust_score(
         top_risk_insights=insights,
         photo_analysis=photo_analysis,
         chat_analysis=chat_analysis,
-        created_at=db_report.created_at.isoformat()
+        created_at=db_report.created_at.isoformat(),
+        conversation_id=conversation.id if conversation else None
     )
     
     return report
@@ -792,3 +819,82 @@ async def list_reports(db: Session = Depends(get_db)):
         ))
     
     return {"reports": reports}
+
+@app.get("/timeline/{conversation_id}", response_model=TimelineResponse)
+async def get_timeline(conversation_id: str, db: Session = Depends(get_db)):
+    """Get the Trust Timeline™ for a specific conversation showing per-message risk evolution"""
+    conversation = db.query(DBConversation).filter(
+        DBConversation.id == conversation_id
+    ).first()
+    
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    messages = [
+        TimelineMessage(
+            message_index=ap.message_index,
+            message_text=ap.message_text,
+            timestamp=ap.timestamp.isoformat(),
+            trust_score_delta=ap.trust_score_delta,
+            tone_shift_delta=ap.tone_shift_delta,
+            wallet_watch_flag=ap.wallet_watch_flag,
+            risk_rationale=ap.risk_rationale
+        )
+        for ap in sorted(conversation.analysis_points, key=lambda x: x.message_index)
+    ]
+    
+    return TimelineResponse(
+        conversation_id=conversation.id,
+        final_trust_score=conversation.final_trust_score or 0,
+        start_date=conversation.start_date.isoformat(),
+        last_updated=conversation.last_updated.isoformat(),
+        message_count=len(messages),
+        messages=messages
+    )
+
+@app.get("/analytics/patterns", response_model=PatternAnalytics)
+async def get_pattern_analytics(db: Session = Depends(get_db)):
+    """Get analytics about scam patterns across all conversations"""
+    conversations = db.query(DBConversation).all()
+    analysis_points = db.query(DBAnalysisPoint).all()
+    
+    total_conversations = len(conversations)
+    high_risk_conversations = len([c for c in conversations if c.final_trust_score and c.final_trust_score < 40])
+    
+    trust_scores = [c.final_trust_score for c in conversations if c.final_trust_score is not None]
+    average_trust_score = sum(trust_scores) / len(trust_scores) if trust_scores else 0
+    
+    pattern_counts = {}
+    for ap in analysis_points:
+        if ap.risk_rationale and ap.risk_rationale != "No new risk detected":
+            patterns = [p.strip() for p in ap.risk_rationale.split(";")]
+            for pattern in patterns:
+                pattern_counts[pattern] = pattern_counts.get(pattern, 0) + 1
+    
+    most_common_patterns = [
+        {"pattern": pattern, "count": count}
+        for pattern, count in sorted(pattern_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+    ]
+    
+    financial_points = [ap for ap in analysis_points if ap.wallet_watch_flag]
+    financial_message_indices = [ap.message_index for ap in financial_points]
+    avg_financial_message_index = sum(financial_message_indices) / len(financial_message_indices) if financial_message_indices else 0
+    
+    financial_request_stats = {
+        "total_financial_requests": len(financial_points),
+        "conversations_with_financial_requests": len(set(ap.conversation_id for ap in financial_points)),
+        "average_message_index": round(avg_financial_message_index, 1),
+        "percentage_of_conversations": round((len(set(ap.conversation_id for ap in financial_points)) / total_conversations * 100) if total_conversations > 0 else 0, 1)
+    }
+    
+    message_counts = [len(c.analysis_points) for c in conversations if c.analysis_points]
+    average_message_count = sum(message_counts) / len(message_counts) if message_counts else 0
+    
+    return PatternAnalytics(
+        total_conversations=total_conversations,
+        high_risk_conversations=high_risk_conversations,
+        average_trust_score=round(average_trust_score, 1),
+        most_common_patterns=most_common_patterns,
+        financial_request_stats=financial_request_stats,
+        average_message_count=round(average_message_count, 1)
+    )
