@@ -902,9 +902,11 @@ Please send me $500 right now via crypto!`
                   </CardDescription>
                 </div>
                 <Button
-                  onClick={() => setShowScammerProfile(!showScammerProfile)}
+                  type="button"
+                  onClick={() => setShowScammerProfile(prev => !prev)}
                   variant="outline"
-                  className="border-[#5B3256] text-[#5B3256]"
+                  className="border-[#5B3256] text-[#5B3256] pointer-events-auto relative z-20 min-h-[44px] min-w-[80px]"
+                  aria-expanded={showScammerProfile}
                 >
                   {showScammerProfile ? 'Hide' : 'Show'}
                 </Button>
