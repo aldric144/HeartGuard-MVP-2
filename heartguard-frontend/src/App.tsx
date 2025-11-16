@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import './App.css'
-import { Shield, Upload, MessageSquare, AlertTriangle, CheckCircle, XCircle, Heart, TrendingUp, Globe, Download, ExternalLink, Users, Search, Archive, ChevronLeft, ChevronRight, Plus, RotateCcw } from 'lucide-react'
+import { Shield, Upload, MessageSquare, AlertTriangle, CheckCircle, XCircle, Heart, TrendingUp, Globe, Download, ExternalLink, Users, Search, Archive, ChevronLeft, ChevronRight, Plus, RotateCcw, UserPlus, Bell, Trash2, Mail, Phone } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { ScamHotspotMap } from '@/components/ScamHotspotMap'
 import { SafetyReplyCard } from '@/components/SafetyReplyCard'
+import { GuardianMode } from '@/components/GuardianMode'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -148,6 +149,18 @@ function App() {
   const [suspectedIPs, setSuspectedIPs] = useState('')
   const [ipIntelligence, setIpIntelligence] = useState<any[]>([])
   const [loadingIP, setLoadingIP] = useState(false)
+  
+  const [showGuardianMode, setShowGuardianMode] = useState(false)
+  const [guardianTab, setGuardianTab] = useState<'contacts' | 'alerts'>('contacts')
+  const [trustedContacts, setTrustedContacts] = useState<any[]>([])
+  const [alertHistory, setAlertHistory] = useState<any[]>([])
+  const [loadingContacts, setLoadingContacts] = useState(false)
+  const [loadingAlerts, setLoadingAlerts] = useState(false)
+  const [showAddContact, setShowAddContact] = useState(false)
+  const [newContactName, setNewContactName] = useState('')
+  const [newContactEmail, setNewContactEmail] = useState('')
+  const [newContactPhone, setNewContactPhone] = useState('')
+  const [newContactThreshold, setNewContactThreshold] = useState(40)
 
   useEffect(() => {
     const stored = localStorage.getItem('heartguard_people')
@@ -1165,6 +1178,14 @@ Please send me $500 right now via crypto!`
                       </>
                     )}
                   </Button>
+
+                  <Button
+                    onClick={() => setShowGuardianMode(true)}
+                    className="w-full bg-[#E6B7BE] hover:bg-[#E6B7BE]/90 text-[#5B3256]"
+                  >
+                    <Shield className="mr-2" />
+                    Guardian Mode™ - FamilyLink™
+                  </Button>
                   
                   {reportHash && (
                     <Alert className="bg-green-50 border-green-300">
@@ -1564,6 +1585,15 @@ Please send me $500 right now via crypto!`
           <p className="opacity-90">HeartGuard™ - Empowering safer connections through compassionate AI</p>
         </div>
       </div>
+      <audio ref={audioRef} />
+      
+      {/* Guardian Mode Modal */}
+      {showGuardianMode && report?.conversation_id && (
+        <GuardianMode
+          conversationId={report.conversation_id}
+          onClose={() => setShowGuardianMode(false)}
+        />
+      )}
     </div>
   )
 }
