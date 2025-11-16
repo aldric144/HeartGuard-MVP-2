@@ -22,7 +22,9 @@ from app.models.database import (
     ManipulationPattern as DBManipulationPattern,
     AnalysisHistory,
     Conversation as DBConversation,
-    AnalysisPoint as DBAnalysisPoint
+    AnalysisPoint as DBAnalysisPoint,
+    GeographicRisk,
+    populate_geographic_risks
 )
 from app.toneshift_engine import toneshift_engine
 
@@ -42,6 +44,7 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_event():
     init_db()
+    populate_geographic_risks()
 
 class ChatAnalysisRequest(BaseModel):
     messages: List[str]
@@ -71,9 +74,12 @@ class ChatAnalysisResponse(BaseModel):
 class MetadataAnalysisResponse(BaseModel):
     profile_age_score: int
     consistency_score: int
+    location_risk_score: int
     final_metadata_score: int
     profile_age_days: int
     consistency_issues: List[str]
+    location_risk_rationale: Optional[str] = None
+    is_known_scam_origin: bool = False
 
 class TrustScoreReport(BaseModel):
     report_id: str
@@ -110,6 +116,14 @@ class PatternAnalytics(BaseModel):
     most_common_patterns: List[dict]
     financial_request_stats: dict
     average_message_count: float
+
+class LocationRiskResponse(BaseModel):
+    is_known_scam_origin: bool
+    location_risk_score: int
+    risk_rationale: str
+    matched_code: Optional[str] = None
+    region: Optional[str] = None
+    risk_level: Optional[str] = None
 
 def detect_deepfake(image_data: bytes) -> tuple[str, List[str]]:
     try:
@@ -495,22 +509,51 @@ async def analyze_chat(request: ChatAnalysisRequest):
     )
 
 @app.post("/analyze/metadata", response_model=MetadataAnalysisResponse)
-async def analyze_metadata(profile_id: str = Form(...)):
+async def analyze_metadata(
+    profile_id: str = Form(...), 
+    phone_number: Optional[str] = Form(None),
+    db: Session = Depends(get_db)
+):
     """
     Metadata Integrity Engine endpoint
-    Analyzes profile age and consistency to detect suspicious accounts
+    Analyzes profile age, consistency, and location risk to detect suspicious accounts
     """
     profile_age_days, profile_age_score = simulate_profile_age_check(profile_id)
     consistency_score, consistency_issues = simulate_consistency_check(profile_id)
     
-    final_metadata_score = int((profile_age_score + consistency_score) / 2)
+    location_risk_score = 100
+    location_risk_rationale = None
+    is_known_scam_origin = False
+    
+    if phone_number:
+        phone_input = phone_number.strip()
+        matched_risk = None
+        for risk in db.query(GeographicRisk).all():
+            if phone_input.startswith(risk.code):
+                if matched_risk is None or len(risk.code) > len(matched_risk.code):
+                    matched_risk = risk
+        
+        if matched_risk:
+            risk_score_map = {
+                "Extreme": 10,
+                "High": 30,
+                "Medium": 60
+            }
+            location_risk_score = risk_score_map.get(matched_risk.risk_level, 50)
+            location_risk_rationale = f"Code {matched_risk.code} ({matched_risk.region}) is a {matched_risk.risk_level} risk origin for romance fraud"
+            is_known_scam_origin = True
+    
+    final_metadata_score = int((profile_age_score + consistency_score + location_risk_score) / 3)
     
     return MetadataAnalysisResponse(
         profile_age_score=profile_age_score,
         consistency_score=consistency_score,
+        location_risk_score=location_risk_score,
         final_metadata_score=final_metadata_score,
         profile_age_days=profile_age_days,
-        consistency_issues=consistency_issues
+        consistency_issues=consistency_issues,
+        location_risk_rationale=location_risk_rationale,
+        is_known_scam_origin=is_known_scam_origin
     )
 
 @app.post("/trustscore/generate", response_model=TrustScoreReport)
@@ -898,3 +941,36 @@ async def get_pattern_analytics(db: Session = Depends(get_db)):
         financial_request_stats=financial_request_stats,
         average_message_count=round(average_message_count, 1)
     )
+
+@app.get("/analyze/location/{phone_number_or_code}", response_model=LocationRiskResponse)
+async def analyze_location(phone_number_or_code: str, db: Session = Depends(get_db)):
+    phone_input = phone_number_or_code.strip()
+    
+    matched_risk = None
+    for risk in db.query(GeographicRisk).all():
+        if phone_input.startswith(risk.code):
+            if matched_risk is None or len(risk.code) > len(matched_risk.code):
+                matched_risk = risk
+    
+    if matched_risk:
+        risk_score_map = {
+            "Extreme": 10,
+            "High": 30,
+            "Medium": 60
+        }
+        location_risk_score = risk_score_map.get(matched_risk.risk_level, 50)
+        
+        return LocationRiskResponse(
+            is_known_scam_origin=True,
+            location_risk_score=location_risk_score,
+            risk_rationale=f"Code {matched_risk.code} ({matched_risk.region}) is a {matched_risk.risk_level} risk origin for romance fraud",
+            matched_code=matched_risk.code,
+            region=matched_risk.region,
+            risk_level=matched_risk.risk_level
+        )
+    else:
+        return LocationRiskResponse(
+            is_known_scam_origin=False,
+            location_risk_score=100,
+            risk_rationale="No known high-risk origin detected for this code"
+        )
