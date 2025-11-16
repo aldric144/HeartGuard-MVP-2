@@ -1,8 +1,9 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey, JSON, create_engine
+from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey, JSON, Boolean, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 from datetime import datetime
 import os
+import uuid
 
 Base = declarative_base()
 
@@ -79,6 +80,31 @@ class AnalysisHistory(Base):
     report_id = Column(String)
     action = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class Conversation(Base):
+    __tablename__ = "conversations"
+    
+    id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    start_date = Column(DateTime, default=datetime.utcnow)
+    last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    final_trust_score = Column(Integer, nullable=True)
+    
+    analysis_points = relationship("AnalysisPoint", back_populates="conversation", cascade="all, delete-orphan")
+
+class AnalysisPoint(Base):
+    __tablename__ = "analysis_points"
+    
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    conversation_id = Column(String, ForeignKey("conversations.id"))
+    message_index = Column(Integer)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    message_text = Column(Text)
+    trust_score_delta = Column(Integer)
+    tone_shift_delta = Column(Integer)
+    wallet_watch_flag = Column(Boolean, default=False)
+    risk_rationale = Column(Text)
+    
+    conversation = relationship("Conversation", back_populates="analysis_points")
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./heartguard.db")
 

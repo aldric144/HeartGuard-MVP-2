@@ -20,7 +20,9 @@ from app.models.database import (
     PhotoAnalysis as DBPhotoAnalysis,
     ChatAnalysis as DBChatAnalysis,
     ManipulationPattern as DBManipulationPattern,
-    AnalysisHistory
+    AnalysisHistory,
+    Conversation as DBConversation,
+    AnalysisPoint as DBAnalysisPoint
 )
 from app.toneshift_engine import toneshift_engine
 
@@ -525,10 +527,77 @@ async def generate_trust_score(
             risk_level=risk_level
         )
     
+    conversation = None
     if chat_messages:
         messages_list = [msg.strip() for msg in chat_messages.split("\n") if msg.strip()]
-        messages = [{"sender": "user", "text": msg} for msg in messages_list]
         
+        if messages_list:
+            conversation = DBConversation(id=str(uuid.uuid4()))
+            db.add(conversation)
+            db.flush()
+            
+            prev_final_score = calculate_trust_score(photo_analysis, None, metadata_analysis)[0]
+            prev_toneshift_contrib = 50
+            
+            for i, msg_text in enumerate(messages_list, start=1):
+                messages_prefix = [{"sender": "user", "text": m} for m in messages_list[:i]]
+                analysis_i = toneshift_engine.analyze_conversation(messages_prefix)
+                
+                emi_i = analysis_i["emotional_manipulation_index"]
+                toneshift_score_i = int((1 - emi_i) * 100)
+                toneshift_contrib_i = round(toneshift_score_i * 0.50)
+                
+                chat_analysis_i = ChatAnalysisResponse(
+                    sentiment_drift=analysis_i["sentiment_drift"],
+                    manipulation_patterns=[
+                        ManipulationPattern(
+                            pattern_type=p["pattern_type"],
+                            severity=p["severity"],
+                            evidence=p["evidence"],
+                            timestamp=p["timestamp"]
+                        )
+                        for p in analysis_i["manipulation_patterns"]
+                    ],
+                    emotional_manipulation_index=emi_i,
+                    risk_level=analysis_i["risk_level"]
+                )
+                
+                final_i = calculate_trust_score(photo_analysis, chat_analysis_i, metadata_analysis)[0]
+                trust_delta = final_i - prev_final_score
+                tone_delta = toneshift_contrib_i - prev_toneshift_contrib
+                
+                wallet_watch_flag = any(
+                    p["pattern_type"] in ["Financial Request", "Cryptocurrency Request", "Gift Card Request"] 
+                    and p["timestamp"] == f"Message {i}"
+                    for p in analysis_i["manipulation_patterns"]
+                )
+                
+                risk_patterns = [
+                    p["pattern_type"] 
+                    for p in analysis_i["manipulation_patterns"] 
+                    if p["timestamp"] == f"Message {i}"
+                ]
+                risk_rationale = "; ".join(risk_patterns) if risk_patterns else "No new risk detected"
+                
+                analysis_point = DBAnalysisPoint(
+                    conversation_id=conversation.id,
+                    message_index=i,
+                    timestamp=datetime.utcnow(),
+                    message_text=msg_text,
+                    trust_score_delta=trust_delta,
+                    tone_shift_delta=tone_delta,
+                    wallet_watch_flag=wallet_watch_flag,
+                    risk_rationale=risk_rationale
+                )
+                db.add(analysis_point)
+                
+                prev_final_score = final_i
+                prev_toneshift_contrib = toneshift_contrib_i
+            
+            conversation.final_trust_score = prev_final_score
+            conversation.last_updated = datetime.utcnow()
+        
+        messages = [{"sender": "user", "text": msg} for msg in messages_list]
         analysis = toneshift_engine.analyze_conversation(messages)
         
         manipulation_patterns = [
