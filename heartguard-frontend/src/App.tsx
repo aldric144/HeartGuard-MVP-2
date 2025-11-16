@@ -168,12 +168,18 @@ function App() {
   const createPersonKey = (name: string, hint?: string): string => {
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-')
     const hintSlug = hint ? `-${hint.toLowerCase().replace(/[^a-z0-9]+/g, '-')}` : ''
+    
+    if (slug.startsWith('unknown') && !hint) {
+      const uniqueSuffix = Date.now().toString().slice(-6)
+      return `${slug}-${uniqueSuffix}`
+    }
+    
     return `${slug}${hintSlug}`
   }
 
   const addOrUpdatePerson = (conversationId: string, score: number) => {
     const now = new Date().toISOString()
-    const personName = newPersonName.trim() || scammerName.trim() || 'Unknown'
+    const personName = newPersonName.trim() || scammerName.trim() || `Unknown ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}`
     const personKey = isNewPerson ? createPersonKey(personName, newPersonHint) : currentPersonKey!
     
     const updatedStorage = { ...peopleStorage }
@@ -376,11 +382,6 @@ Please send me $500 right now via crypto!`
       setError('Please upload a photo or enter chat messages to analyze')
       return
     }
-    
-    if (isNewPerson && !newPersonName.trim() && !scammerName.trim()) {
-      setError('Please enter a name for the person you\'re analyzing')
-      return
-    }
 
     setLoading(true)
     setError(null)
@@ -395,7 +396,7 @@ Please send me $500 right now via crypto!`
         formData.append('chat_messages', chatMessages)
       }
       
-      const personName = newPersonName.trim() || scammerName.trim() || 'Unknown'
+      const personName = newPersonName.trim() || scammerName.trim() || `Unknown ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}`
       
       if (personName || scammerPhone || scammerEmail || victimNarrative) {
         const scammerProfile = {
