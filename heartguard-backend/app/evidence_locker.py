@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 import qrcode
 import os
 
-from app.models.database import Conversation, AnalysisPoint, GeographicRisk, EvidenceReport
+from app.models.database import Conversation, AnalysisPoint, GeographicRisk, EvidenceReport, ScammerProfile, SocialHandle, PaymentInstruction
 
 
 class EvidenceReportPDF(FPDF):
@@ -43,7 +43,7 @@ class EvidenceReportPDF(FPDF):
         if hasattr(self, 'verification_hash'):
             self.set_font('Arial', 'I', 6)
             self.set_text_color(100, 100, 100)
-            verify_text = f'Verify at heartguard.app/verify | Hash: {self.verification_hash[:16]}...'
+            verify_text = f'Verify at heart-guard-mvp-2.vercel.app/verify | Hash: {self.verification_hash[:16]}...'
             self.cell(0, 5, verify_text, 0, 0, 'C')
 
 
@@ -68,7 +68,8 @@ def compute_dataset_hash(dataset: Dict[str, Any]) -> str:
 def assemble_report_dataset(
     conversation: Conversation,
     analysis_points: List[AnalysisPoint],
-    geographic_risk: Optional[GeographicRisk] = None
+    geographic_risk: Optional[GeographicRisk] = None,
+    scammer_profile: Optional[ScammerProfile] = None
 ) -> Dict[str, Any]:
     """Assemble canonical report dataset for hashing and PDF generation"""
     
@@ -99,6 +100,63 @@ def assemble_report_dataset(
             "scam_types": geographic_risk.scam_types,
             "notes": geographic_risk.notes
         } if geographic_risk else None,
+        "scammer_profile": {
+            "claimed_name": scammer_profile.claimed_name,
+            "aliases": scammer_profile.aliases,
+            "claimed_dob": scammer_profile.claimed_dob,
+            "claimed_address": scammer_profile.claimed_address,
+            "claimed_occupation": scammer_profile.claimed_occupation,
+            "phone_numbers": scammer_profile.phone_numbers,
+            "email_addresses": scammer_profile.email_addresses,
+            "platform_met": scammer_profile.platform_met,
+            "first_contact_date": scammer_profile.first_contact_date,
+            "last_contact_date": scammer_profile.last_contact_date,
+            "communication_channels": scammer_profile.communication_channels,
+            "total_amount_requested": scammer_profile.total_amount_requested,
+            "total_amount_sent": scammer_profile.total_amount_sent,
+            "currency": scammer_profile.currency,
+            "victim_narrative": scammer_profile.victim_narrative,
+            "ic3_complaint_number": scammer_profile.ic3_complaint_number,
+            "ftc_report_id": scammer_profile.ftc_report_id,
+            "police_incident_number": scammer_profile.police_incident_number,
+            "other_agency_references": scammer_profile.other_agency_references,
+            "social_handles": [
+                {
+                    "platform": h.platform,
+                    "username": h.username,
+                    "profile_url": h.profile_url,
+                    "profile_id": h.profile_id,
+                    "notes": h.notes
+                }
+                for h in scammer_profile.social_handles
+            ] if scammer_profile.social_handles else [],
+            "payment_instructions": [
+                {
+                    "method": p.method,
+                    "bank_name": p.bank_name,
+                    "account_holder_name": p.account_holder_name,
+                    "account_number": p.account_number[-4:] if p.account_number else None,
+                    "routing_number": p.routing_number,
+                    "swift_code": p.swift_code,
+                    "iban": p.iban,
+                    "receiver_name": p.receiver_name,
+                    "receiver_city": p.receiver_city,
+                    "receiver_country": p.receiver_country,
+                    "pickup_location": p.pickup_location,
+                    "app_handle": p.app_handle,
+                    "crypto_chain": p.crypto_chain,
+                    "crypto_address": p.crypto_address,
+                    "crypto_memo": p.crypto_memo,
+                    "exchange_platform": p.exchange_platform,
+                    "exchange_uid": p.exchange_uid,
+                    "gift_card_brand": p.gift_card_brand,
+                    "gift_card_amount": p.gift_card_amount,
+                    "amount_requested": p.amount_requested,
+                    "notes": p.notes
+                }
+                for p in scammer_profile.payment_instructions
+            ] if scammer_profile.payment_instructions else []
+        } if scammer_profile else None,
         "generated_at": datetime.utcnow().isoformat() + "Z"
     }
     
@@ -125,22 +183,35 @@ def generate_risk_summary(analysis_points: List[AnalysisPoint]) -> Dict[str, Any
 
 def generate_qr_code(data: str, size: int = 100) -> str:
     """Generate QR code and save to temp file, return file path"""
-    qr = qrcode.QRCode(version=1, box_size=10, border=2)
-    qr.add_data(data)
-    qr.make(fit=True)
-    
-    img = qr.make_image(fill_color="black", back_color="white")
-    
-    temp_path = f"/tmp/qr_{hashlib.md5(data.encode()).hexdigest()}.png"
-    img.save(temp_path)
-    
-    return temp_path
+    try:
+        qr = qrcode.QRCode(version=1, box_size=10, border=2)
+        qr.add_data(data)
+        qr.make(fit=True)
+        
+        img = qr.make_image(fill_color="black", back_color="white")
+        
+        temp_path = f"/tmp/qr_{hashlib.md5(data.encode()).hexdigest()}.png"
+        img.save(temp_path)
+        
+        if os.path.exists(temp_path):
+            file_size = os.path.getsize(temp_path)
+            print(f"✅ QR code generated successfully: {temp_path} ({file_size} bytes)")
+        else:
+            print(f"❌ QR code file not created: {temp_path}")
+        
+        return temp_path
+    except Exception as e:
+        print(f"❌ QR code generation failed: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return ""
 
 
 def generate_evidence_pdf(
     conversation: Conversation,
     analysis_points: List[AnalysisPoint],
     geographic_risk: Optional[GeographicRisk] = None,
+    scammer_profile: Optional[ScammerProfile] = None,
     app_version: str = "1.0.0",
     backend_version: str = "1.0.0"
 ) -> tuple[BytesIO, str, Dict[str, Any]]:
@@ -150,7 +221,7 @@ def generate_evidence_pdf(
         tuple: (pdf_buffer, dataset_hash, report_data)
     """
     
-    dataset = assemble_report_dataset(conversation, analysis_points, geographic_risk)
+    dataset = assemble_report_dataset(conversation, analysis_points, geographic_risk, scammer_profile)
     data_hash = compute_dataset_hash(dataset)
     risk_summary = generate_risk_summary(analysis_points)
     
@@ -315,6 +386,239 @@ def generate_evidence_pdf(
         pdf.set_text_color(128, 128, 128)
         pdf.cell(0, 5, 'Legend: $ = Wallet Watch Flag (Financial Request Detected)', 0, 1)
     
+    if scammer_profile:
+        pdf.add_page()
+        pdf.set_font('Arial', 'B', 12)
+        pdf.set_text_color(91, 50, 86)
+        pdf.cell(0, 10, 'Suspected Scammer Profile', 0, 1)
+        pdf.ln(2)
+        
+        pdf.set_font('Arial', '', 9)
+        pdf.set_text_color(0, 0, 0)
+        
+        if scammer_profile.claimed_name or scammer_profile.claimed_dob or scammer_profile.claimed_address or scammer_profile.claimed_occupation:
+            pdf.set_font('Arial', 'B', 10)
+            pdf.set_text_color(91, 50, 86)
+            pdf.cell(0, 8, 'Identity Information', 0, 1)
+            pdf.ln(1)
+            
+            pdf.set_font('Arial', '', 9)
+            pdf.set_text_color(0, 0, 0)
+            
+            if scammer_profile.claimed_name:
+                pdf.set_font('Arial', 'B', 9)
+                pdf.cell(50, 6, 'Claimed Name:', 0, 0)
+                pdf.set_font('Arial', '', 9)
+                pdf.cell(0, 6, scammer_profile.claimed_name, 0, 1)
+            
+            if scammer_profile.aliases:
+                pdf.set_font('Arial', 'B', 9)
+                pdf.cell(50, 6, 'Known Aliases:', 0, 0)
+                pdf.set_font('Arial', '', 9)
+                pdf.cell(0, 6, ', '.join(scammer_profile.aliases), 0, 1)
+            
+            if scammer_profile.claimed_dob:
+                pdf.set_font('Arial', 'B', 9)
+                pdf.cell(50, 6, 'Claimed DOB:', 0, 0)
+                pdf.set_font('Arial', '', 9)
+                pdf.cell(0, 6, scammer_profile.claimed_dob, 0, 1)
+            
+            if scammer_profile.claimed_occupation:
+                pdf.set_font('Arial', 'B', 9)
+                pdf.cell(50, 6, 'Claimed Occupation:', 0, 0)
+                pdf.set_font('Arial', '', 9)
+                pdf.cell(0, 6, scammer_profile.claimed_occupation, 0, 1)
+            
+            if scammer_profile.claimed_address:
+                pdf.set_font('Arial', 'B', 9)
+                pdf.cell(50, 6, 'Claimed Address:', 0, 0)
+                pdf.set_font('Arial', '', 8)
+                pdf.multi_cell(0, 6, sanitize_text(scammer_profile.claimed_address, max_length=200))
+            
+            pdf.ln(3)
+        
+        if scammer_profile.phone_numbers or scammer_profile.email_addresses or scammer_profile.social_handles:
+            pdf.set_font('Arial', 'B', 10)
+            pdf.set_text_color(91, 50, 86)
+            pdf.cell(0, 8, 'Contact Information', 0, 1)
+            pdf.ln(1)
+            
+            pdf.set_font('Arial', '', 9)
+            pdf.set_text_color(0, 0, 0)
+            
+            if scammer_profile.phone_numbers:
+                pdf.set_font('Arial', 'B', 9)
+                pdf.cell(50, 6, 'Phone Numbers:', 0, 0)
+                pdf.set_font('Arial', '', 9)
+                pdf.cell(0, 6, ', '.join(scammer_profile.phone_numbers), 0, 1)
+            
+            if scammer_profile.email_addresses:
+                pdf.set_font('Arial', 'B', 9)
+                pdf.cell(50, 6, 'Email Addresses:', 0, 0)
+                pdf.set_font('Arial', '', 8)
+                pdf.multi_cell(0, 6, ', '.join(scammer_profile.email_addresses))
+            
+            if scammer_profile.social_handles:
+                pdf.ln(2)
+                pdf.set_font('Arial', 'B', 9)
+                pdf.cell(0, 6, 'Social Media Profiles:', 0, 1)
+                pdf.ln(1)
+                
+                for handle in scammer_profile.social_handles:
+                    pdf.set_font('Arial', 'B', 8)
+                    pdf.cell(30, 5, f'{handle.platform}:', 0, 0)
+                    pdf.set_font('Arial', '', 8)
+                    handle_info = handle.username or handle.profile_url or handle.profile_id or 'N/A'
+                    pdf.cell(0, 5, sanitize_text(handle_info, max_length=100), 0, 1)
+            
+            pdf.ln(3)
+        
+        if scammer_profile.platform_met or scammer_profile.first_contact_date or scammer_profile.communication_channels:
+            pdf.set_font('Arial', 'B', 10)
+            pdf.set_text_color(91, 50, 86)
+            pdf.cell(0, 8, 'Meeting Context', 0, 1)
+            pdf.ln(1)
+            
+            pdf.set_font('Arial', '', 9)
+            pdf.set_text_color(0, 0, 0)
+            
+            if scammer_profile.platform_met:
+                pdf.set_font('Arial', 'B', 9)
+                pdf.cell(50, 6, 'Platform Met:', 0, 0)
+                pdf.set_font('Arial', '', 9)
+                pdf.cell(0, 6, scammer_profile.platform_met, 0, 1)
+            
+            if scammer_profile.first_contact_date:
+                pdf.set_font('Arial', 'B', 9)
+                pdf.cell(50, 6, 'First Contact:', 0, 0)
+                pdf.set_font('Arial', '', 9)
+                pdf.cell(0, 6, scammer_profile.first_contact_date, 0, 1)
+            
+            if scammer_profile.last_contact_date:
+                pdf.set_font('Arial', 'B', 9)
+                pdf.cell(50, 6, 'Last Contact:', 0, 0)
+                pdf.set_font('Arial', '', 9)
+                pdf.cell(0, 6, scammer_profile.last_contact_date, 0, 1)
+            
+            if scammer_profile.communication_channels:
+                pdf.set_font('Arial', 'B', 9)
+                pdf.cell(50, 6, 'Channels Used:', 0, 0)
+                pdf.set_font('Arial', '', 9)
+                pdf.cell(0, 6, ', '.join(scammer_profile.communication_channels), 0, 1)
+            
+            pdf.ln(3)
+        
+        if scammer_profile.total_amount_requested or scammer_profile.total_amount_sent or scammer_profile.payment_instructions:
+            pdf.set_font('Arial', 'B', 10)
+            pdf.set_text_color(91, 50, 86)
+            pdf.cell(0, 8, 'Financial Evidence', 0, 1)
+            pdf.ln(1)
+            
+            pdf.set_font('Arial', '', 9)
+            pdf.set_text_color(0, 0, 0)
+            
+            if scammer_profile.total_amount_requested:
+                pdf.set_font('Arial', 'B', 9)
+                pdf.cell(50, 6, 'Total Requested:', 0, 0)
+                pdf.set_font('Arial', '', 9)
+                pdf.cell(0, 6, f'{scammer_profile.currency} {scammer_profile.total_amount_requested:,.2f}', 0, 1)
+            
+            if scammer_profile.total_amount_sent:
+                pdf.set_font('Arial', 'B', 9)
+                pdf.cell(50, 6, 'Total Sent/Lost:', 0, 0)
+                pdf.set_font('Arial', '', 9)
+                pdf.cell(0, 6, f'{scammer_profile.currency} {scammer_profile.total_amount_sent:,.2f}', 0, 1)
+            
+            if scammer_profile.payment_instructions:
+                pdf.ln(2)
+                pdf.set_font('Arial', 'B', 9)
+                pdf.cell(0, 6, 'Payment Instructions Provided:', 0, 1)
+                pdf.ln(1)
+                
+                for idx, payment in enumerate(scammer_profile.payment_instructions, 1):
+                    pdf.set_font('Arial', 'B', 8)
+                    pdf.cell(0, 5, f'#{idx} - {payment.method}', 0, 1)
+                    pdf.set_font('Arial', '', 8)
+                    
+                    if payment.bank_name:
+                        pdf.cell(5, 5, '', 0, 0)
+                        pdf.cell(40, 5, 'Bank:', 0, 0)
+                        pdf.cell(0, 5, payment.bank_name, 0, 1)
+                    if payment.account_holder_name:
+                        pdf.cell(5, 5, '', 0, 0)
+                        pdf.cell(40, 5, 'Account Holder:', 0, 0)
+                        pdf.cell(0, 5, payment.account_holder_name, 0, 1)
+                    if payment.account_number:
+                        pdf.cell(5, 5, '', 0, 0)
+                        pdf.cell(40, 5, 'Account:', 0, 0)
+                        masked = '****' + payment.account_number[-4:] if len(payment.account_number) > 4 else payment.account_number
+                        pdf.cell(0, 5, masked, 0, 1)
+                    if payment.receiver_name:
+                        pdf.cell(5, 5, '', 0, 0)
+                        pdf.cell(40, 5, 'Receiver:', 0, 0)
+                        pdf.cell(0, 5, payment.receiver_name, 0, 1)
+                    if payment.receiver_city or payment.receiver_country:
+                        pdf.cell(5, 5, '', 0, 0)
+                        pdf.cell(40, 5, 'Location:', 0, 0)
+                        location = f"{payment.receiver_city}, {payment.receiver_country}" if payment.receiver_city and payment.receiver_country else payment.receiver_city or payment.receiver_country
+                        pdf.cell(0, 5, location, 0, 1)
+                    if payment.crypto_address:
+                        pdf.cell(5, 5, '', 0, 0)
+                        pdf.cell(40, 5, 'Crypto Address:', 0, 0)
+                        pdf.cell(0, 5, payment.crypto_address[:20] + '...', 0, 1)
+                    if payment.app_handle:
+                        pdf.cell(5, 5, '', 0, 0)
+                        pdf.cell(40, 5, 'App Handle:', 0, 0)
+                        pdf.cell(0, 5, payment.app_handle, 0, 1)
+                    if payment.amount_requested:
+                        pdf.cell(5, 5, '', 0, 0)
+                        pdf.cell(40, 5, 'Amount:', 0, 0)
+                        pdf.cell(0, 5, f'{scammer_profile.currency} {payment.amount_requested:,.2f}', 0, 1)
+                    
+                    pdf.ln(1)
+            
+            pdf.ln(3)
+        
+        if scammer_profile.victim_narrative:
+            pdf.set_font('Arial', 'B', 10)
+            pdf.set_text_color(91, 50, 86)
+            pdf.cell(0, 8, 'Victim Statement', 0, 1)
+            pdf.ln(1)
+            
+            pdf.set_font('Arial', '', 9)
+            pdf.set_text_color(0, 0, 0)
+            pdf.multi_cell(0, 5, sanitize_text(scammer_profile.victim_narrative, max_length=1000))
+            pdf.ln(3)
+        
+        if scammer_profile.ic3_complaint_number or scammer_profile.ftc_report_id or scammer_profile.police_incident_number:
+            pdf.set_font('Arial', 'B', 10)
+            pdf.set_text_color(91, 50, 86)
+            pdf.cell(0, 8, 'Agency Reports Filed', 0, 1)
+            pdf.ln(1)
+            
+            pdf.set_font('Arial', '', 9)
+            pdf.set_text_color(0, 0, 0)
+            
+            if scammer_profile.ic3_complaint_number:
+                pdf.set_font('Arial', 'B', 9)
+                pdf.cell(50, 6, 'IC3 Complaint #:', 0, 0)
+                pdf.set_font('Arial', '', 9)
+                pdf.cell(0, 6, scammer_profile.ic3_complaint_number, 0, 1)
+            
+            if scammer_profile.ftc_report_id:
+                pdf.set_font('Arial', 'B', 9)
+                pdf.cell(50, 6, 'FTC Report ID:', 0, 0)
+                pdf.set_font('Arial', '', 9)
+                pdf.cell(0, 6, scammer_profile.ftc_report_id, 0, 1)
+            
+            if scammer_profile.police_incident_number:
+                pdf.set_font('Arial', 'B', 9)
+                pdf.cell(50, 6, 'Police Incident #:', 0, 0)
+                pdf.set_font('Arial', '', 9)
+                pdf.cell(0, 6, scammer_profile.police_incident_number, 0, 1)
+            
+            pdf.ln(3)
+    
     pdf.add_page()
     pdf.set_font('Arial', 'B', 12)
     pdf.set_text_color(91, 50, 86)
@@ -361,14 +665,24 @@ def generate_evidence_pdf(
     pdf.set_font('Arial', '', 8)
     pdf.set_text_color(0, 0, 0)
     pdf.multi_cell(0, 5, 
-        'Scan the QR code below or visit heartguard.app/verify to verify this report\'s authenticity. '
+        'Scan the QR code below or visit heart-guard-mvp-2.vercel.app/verify to verify this report\'s authenticity. '
         'The verification system will confirm that this evidence has not been tampered with.'
     )
     pdf.ln(3)
     
-    if os.path.exists(qr_path):
-        pdf.image(qr_path, x=80, w=50)
-        os.remove(qr_path)
+    if qr_path and os.path.exists(qr_path):
+        try:
+            pdf.image(qr_path, x=80, w=50)
+            print(f"✅ QR code embedded in PDF successfully")
+            os.remove(qr_path)
+        except Exception as e:
+            print(f"❌ Failed to embed QR code in PDF: {str(e)}")
+    else:
+        print(f"❌ QR code file not found, skipping embedding: {qr_path}")
+        pdf.set_font('Arial', 'B', 9)
+        pdf.cell(0, 6, 'Verification URL:', 0, 1)
+        pdf.set_font('Arial', '', 8)
+        pdf.multi_cell(0, 5, verify_url)
     
     pdf.ln(5)
     pdf.set_font('Arial', 'I', 8)

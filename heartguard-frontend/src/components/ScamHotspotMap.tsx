@@ -236,16 +236,15 @@ export function ScamHotspotMap() {
                     </filter>
                   </defs>
                   
-                  <rect x="0" y="0" width="100" height="70" fill="#F6EAF1" opacity="0.6" />
-                  
-                  <g className={`transition-all duration-1000 ${mapVisible ? 'opacity-100' : 'opacity-0'}`} style={{ transitionDelay: '200ms' }}>
-                    <path d="M 8 30 L 12 25 L 18 22 L 24 24 L 28 28 L 30 35 L 28 42 L 24 48 L 20 50 L 15 48 L 12 45 L 10 40 L 8 35 Z" fill="#9AA5B1" stroke="#334155" strokeWidth="0.4" opacity="0.85" />
-                    <path d="M 24 52 L 28 50 L 32 52 L 34 58 L 32 65 L 28 68 L 24 66 L 22 60 L 23 54 Z" fill="#9AA5B1" stroke="#334155" strokeWidth="0.4" opacity="0.85" />
-                    <path d="M 45 28 L 50 25 L 56 26 L 60 30 L 58 35 L 54 38 L 48 36 L 45 32 Z" fill="#9AA5B1" stroke="#334155" strokeWidth="0.4" opacity="0.85" />
-                    <path d="M 46 40 L 50 38 L 56 40 L 58 45 L 58 52 L 56 60 L 52 66 L 48 64 L 46 58 L 44 50 L 45 44 Z" fill="#9AA5B1" stroke="#334155" strokeWidth="0.4" opacity="0.85" />
-                    <path d="M 62 28 L 68 24 L 75 26 L 82 30 L 88 35 L 90 42 L 88 48 L 82 52 L 76 54 L 70 52 L 65 48 L 62 42 L 60 35 Z" fill="#9AA5B1" stroke="#334155" strokeWidth="0.4" opacity="0.85" />
-                    <path d="M 78 58 L 84 56 L 88 58 L 90 62 L 88 66 L 82 68 L 78 66 L 76 62 Z" fill="#9AA5B1" stroke="#334155" strokeWidth="0.4" opacity="0.85" />
-                  </g>
+                  <image 
+                    href="/assets/world-map.jpg" 
+                    x="0" 
+                    y="0" 
+                    width="100" 
+                    height="70" 
+                    opacity="0.24"
+                    preserveAspectRatio="xMidYMid slice"
+                  />
                   
                   {HOTSPOT_REGIONS.map((region, idx) => (
                     <g 
@@ -340,9 +339,12 @@ export function ScamHotspotMap() {
                         y={region.position.y - 5}
                         fontSize={hoveredRegion?.name === region.name || focusedRegion?.name === region.name ? "3.2" : "2.5"}
                         fill="#0F172A"
+                        stroke="white"
+                        strokeWidth="0.22"
+                        paintOrder="stroke"
+                        fontWeight="700"
                         textAnchor="middle"
-                        className="pointer-events-none font-bold transition-all duration-500"
-                        style={{ textShadow: '0 0 4px white, 0 0 3px white, 0 0 2px white' }}
+                        className="pointer-events-none transition-all duration-500"
                       >
                         {region.name}
                       </text>

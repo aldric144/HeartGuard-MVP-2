@@ -12,6 +12,16 @@ class User(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=True)
+    password_hash = Column(String, nullable=True)
+    subscription_tier = Column(String, default="free")  # free, plus, premium, family
+    subscription_status = Column(String, default="active")  # active, cancelled, expired
+    subscription_start_date = Column(DateTime, nullable=True)
+    subscription_end_date = Column(DateTime, nullable=True)
+    stripe_customer_id = Column(String, nullable=True)
+    stripe_subscription_id = Column(String, nullable=True)
+    monthly_scan_count = Column(Integer, default=0)
+    monthly_scan_limit = Column(Integer, default=3)  # free tier default
+    last_reset_date = Column(DateTime, default=datetime.utcnow)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     reports = relationship("TrustReport", back_populates="user")
@@ -151,10 +161,119 @@ class TrustedContact(Base):
     user_identifier = Column(String, index=True)
     contact_name = Column(String)
     contact_email_or_phone = Column(String)
+    contact_email = Column(String, nullable=True)
+    contact_phone = Column(String, nullable=True)
     alert_preference = Column(String, default='EMAIL')
+    alert_threshold = Column(Integer, default=40)
     is_active = Column(Boolean, default=True)
     last_alert_timestamp = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    
+    alert_logs = relationship("AlertLog", back_populates="contact")
+
+class AlertLog(Base):
+    __tablename__ = "alert_logs"
+    
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    contact_id = Column(Integer, ForeignKey("trusted_contacts.id"))
+    user_identifier = Column(String, index=True)
+    conversation_id = Column(String, index=True)
+    trust_score = Column(Integer)
+    threshold = Column(Integer)
+    channel = Column(String, default='N/A')
+    reason = Column(Text, nullable=True)
+    status = Column(String, default='LOGGED')
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    contact = relationship("TrustedContact", back_populates="alert_logs")
+
+class ScammerProfile(Base):
+    __tablename__ = "scammer_profiles"
+    
+    id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    conversation_id = Column(String, ForeignKey("conversations.id"), unique=True)
+    
+    claimed_name = Column(String, nullable=True)
+    aliases = Column(JSON, nullable=True)  # List of alternate names
+    claimed_dob = Column(String, nullable=True)
+    claimed_address = Column(Text, nullable=True)
+    claimed_occupation = Column(String, nullable=True)
+    
+    phone_numbers = Column(JSON, nullable=True)  # List of phone numbers
+    email_addresses = Column(JSON, nullable=True)  # List of emails
+    
+    platform_met = Column(String, nullable=True)  # Where you first met
+    first_contact_date = Column(String, nullable=True)
+    last_contact_date = Column(String, nullable=True)
+    communication_channels = Column(JSON, nullable=True)  # List of channels used
+    
+    total_amount_requested = Column(Float, nullable=True)
+    total_amount_sent = Column(Float, nullable=True)
+    currency = Column(String, default="USD")
+    
+    victim_narrative = Column(Text, nullable=True)
+    
+    ic3_complaint_number = Column(String, nullable=True)
+    ftc_report_id = Column(String, nullable=True)
+    police_incident_number = Column(String, nullable=True)
+    other_agency_references = Column(JSON, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    conversation = relationship("Conversation", backref="scammer_profile")
+    social_handles = relationship("SocialHandle", back_populates="scammer_profile", cascade="all, delete-orphan")
+    payment_instructions = relationship("PaymentInstruction", back_populates="scammer_profile", cascade="all, delete-orphan")
+
+class SocialHandle(Base):
+    __tablename__ = "social_handles"
+    
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    scammer_profile_id = Column(String, ForeignKey("scammer_profiles.id"))
+    
+    platform = Column(String)  # Tinder, Facebook, Instagram, WhatsApp, Telegram, etc.
+    username = Column(String, nullable=True)
+    profile_url = Column(String, nullable=True)
+    profile_id = Column(String, nullable=True)
+    notes = Column(Text, nullable=True)
+    
+    scammer_profile = relationship("ScammerProfile", back_populates="social_handles")
+
+class PaymentInstruction(Base):
+    __tablename__ = "payment_instructions"
+    
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    scammer_profile_id = Column(String, ForeignKey("scammer_profiles.id"))
+    
+    method = Column(String)  # Western Union, Bitcoin, Gift Cards, Bank Transfer, etc.
+    
+    bank_name = Column(String, nullable=True)
+    account_holder_name = Column(String, nullable=True)
+    account_number = Column(String, nullable=True)  # Store full, mask in PDF
+    routing_number = Column(String, nullable=True)
+    swift_code = Column(String, nullable=True)
+    iban = Column(String, nullable=True)
+    
+    receiver_name = Column(String, nullable=True)
+    receiver_city = Column(String, nullable=True)
+    receiver_country = Column(String, nullable=True)
+    pickup_location = Column(String, nullable=True)
+    
+    app_handle = Column(String, nullable=True)  # $cashtag, @venmo, email, phone
+    
+    crypto_chain = Column(String, nullable=True)  # BTC, ETH, TRX, etc.
+    crypto_address = Column(String, nullable=True)
+    crypto_memo = Column(String, nullable=True)
+    exchange_platform = Column(String, nullable=True)
+    exchange_uid = Column(String, nullable=True)
+    
+    gift_card_brand = Column(String, nullable=True)
+    gift_card_amount = Column(Float, nullable=True)
+    
+    amount_requested = Column(Float, nullable=True)
+    notes = Column(Text, nullable=True)
+    
+    scammer_profile = relationship("ScammerProfile", back_populates="payment_instructions")
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./heartguard.db")
 
@@ -170,6 +289,28 @@ def get_db():
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+    
+    from sqlalchemy import inspect, text
+    inspector = inspect(engine)
+    
+    if 'trusted_contacts' in inspector.get_table_names():
+        existing_columns = [col['name'] for col in inspector.get_columns('trusted_contacts')]
+        
+        with engine.connect() as conn:
+            if 'contact_email' not in existing_columns:
+                conn.execute(text('ALTER TABLE trusted_contacts ADD COLUMN contact_email TEXT'))
+                conn.commit()
+                print('✅ Added contact_email column to trusted_contacts')
+            
+            if 'contact_phone' not in existing_columns:
+                conn.execute(text('ALTER TABLE trusted_contacts ADD COLUMN contact_phone TEXT'))
+                conn.commit()
+                print('✅ Added contact_phone column to trusted_contacts')
+            
+            if 'alert_threshold' not in existing_columns:
+                conn.execute(text('ALTER TABLE trusted_contacts ADD COLUMN alert_threshold INTEGER DEFAULT 40'))
+                conn.commit()
+                print('✅ Added alert_threshold column to trusted_contacts')
 
 def populate_safety_replies():
     """Populate SafetyReply table with contextual safety suggestions"""

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -14,6 +14,7 @@ import io
 import uuid
 from dotenv import load_dotenv
 import os
+import httpx
 
 from app.models.database import (
     Base, engine, get_db, init_db,
@@ -25,13 +26,26 @@ from app.models.database import (
     Conversation as DBConversation,
     AnalysisPoint as DBAnalysisPoint,
     GeographicRisk,
+    ScammerProfile as DBScammerProfile,
+    SocialHandle as DBSocialHandle,
+    PaymentInstruction as DBPaymentInstruction,
     populate_geographic_risks
 )
 from app.toneshift_engine import toneshift_engine
 from app.evidence_locker import generate_evidence_pdf
+from app.alerting import check_and_trigger_alerts
+from app.safety_nudges import generate_safety_nudges, get_safepay_checklist
+from app.usage_tracking import get_or_create_user, check_usage_limit, increment_usage, get_tier_features
 import re
 
 load_dotenv()
+
+TRUST_SCORE_WEIGHTS = {
+    'toneshift': 0.50,
+    'walletwatch': 0.30,
+    'photo': 0.15,
+    'metadata': 0.05
+}
 
 app = FastAPI()
 
@@ -109,6 +123,12 @@ class MetadataAnalysisResponse(BaseModel):
     location_risk_rationale: Optional[str] = None
     is_known_scam_origin: bool = False
 
+class WeightedComponent(BaseModel):
+    engine: str
+    score: float
+    weight: float
+    contribution: float
+
 class TrustScoreReport(BaseModel):
     report_id: str
     trust_score: int
@@ -119,6 +139,8 @@ class TrustScoreReport(BaseModel):
     chat_analysis: Optional[ChatAnalysisResponse] = None
     created_at: str
     conversation_id: Optional[str] = None
+    weighted_breakdown: List[WeightedComponent] = []
+    safety_nudges: List[Dict] = []
 
 class TimelineMessage(BaseModel):
     message_index: int
@@ -152,6 +174,79 @@ class LocationRiskResponse(BaseModel):
     matched_code: Optional[str] = None
     region: Optional[str] = None
     risk_level: Optional[str] = None
+
+class SocialHandleInput(BaseModel):
+    platform: str
+    username: Optional[str] = None
+    profile_url: Optional[str] = None
+    profile_id: Optional[str] = None
+    notes: Optional[str] = None
+
+class PaymentInstructionInput(BaseModel):
+    method: str
+    bank_name: Optional[str] = None
+    account_holder_name: Optional[str] = None
+    account_number: Optional[str] = None
+    routing_number: Optional[str] = None
+    swift_code: Optional[str] = None
+    iban: Optional[str] = None
+    receiver_name: Optional[str] = None
+    receiver_city: Optional[str] = None
+    receiver_country: Optional[str] = None
+    pickup_location: Optional[str] = None
+    app_handle: Optional[str] = None
+    crypto_chain: Optional[str] = None
+    crypto_address: Optional[str] = None
+    crypto_memo: Optional[str] = None
+    exchange_platform: Optional[str] = None
+    exchange_uid: Optional[str] = None
+    gift_card_brand: Optional[str] = None
+    gift_card_amount: Optional[float] = None
+    amount_requested: Optional[float] = None
+    notes: Optional[str] = None
+
+class ScammerProfileInput(BaseModel):
+    claimed_name: Optional[str] = None
+    aliases: Optional[List[str]] = None
+    claimed_dob: Optional[str] = None
+    claimed_address: Optional[str] = None
+    claimed_occupation: Optional[str] = None
+    phone_numbers: Optional[List[str]] = None
+    email_addresses: Optional[List[str]] = None
+    platform_met: Optional[str] = None
+    first_contact_date: Optional[str] = None
+    last_contact_date: Optional[str] = None
+    communication_channels: Optional[List[str]] = None
+    total_amount_requested: Optional[float] = None
+    total_amount_sent: Optional[float] = None
+    currency: Optional[str] = "USD"
+    victim_narrative: Optional[str] = None
+    ic3_complaint_number: Optional[str] = None
+    ftc_report_id: Optional[str] = None
+    police_incident_number: Optional[str] = None
+    other_agency_references: Optional[List[str]] = None
+    social_handles: Optional[List[SocialHandleInput]] = None
+    payment_instructions: Optional[List[PaymentInstructionInput]] = None
+
+class IPIntelligenceResponse(BaseModel):
+    ip: str
+    success: bool
+    country: Optional[str] = None
+    country_code: Optional[str] = None
+    region: Optional[str] = None
+    city: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    isp: Optional[str] = None
+    organization: Optional[str] = None
+    asn: Optional[str] = None
+    is_vpn: bool = False
+    is_proxy: bool = False
+    is_tor: bool = False
+    is_datacenter: bool = False
+    risk_score: int = 0
+    risk_level: str = "Unknown"
+    message: Optional[str] = None
 
 def detect_deepfake(image_data: bytes) -> tuple[str, List[str]]:
     try:
@@ -396,9 +491,52 @@ def calculate_emotional_manipulation_index(sentiment_drift: List[Dict], patterns
     
     return round(emi, 3)
 
+def compute_weighted_trust_score(
+    toneshift_score: float,
+    walletwatch_score: float,
+    photo_score: float,
+    metadata_score: float
+) -> tuple[int, List[WeightedComponent]]:
+    """
+    Calculate weighted trust score and breakdown.
+    Returns: (final_score, weighted_breakdown)
+    """
+    scores = {
+        'toneshift': max(0, min(100, toneshift_score)),
+        'walletwatch': max(0, min(100, walletwatch_score)),
+        'photo': max(0, min(100, photo_score)),
+        'metadata': max(0, min(100, metadata_score))
+    }
+    
+    breakdown = []
+    total_contribution = 0
+    
+    for engine_key, score in scores.items():
+        weight = TRUST_SCORE_WEIGHTS[engine_key]
+        contribution = round(score * weight, 1)
+        total_contribution += contribution
+        
+        engine_names = {
+            'toneshift': 'ToneShift™',
+            'walletwatch': 'WalletWatch™',
+            'photo': 'Photo Provenance',
+            'metadata': 'Metadata Integrity'
+        }
+        
+        breakdown.append(WeightedComponent(
+            engine=engine_names[engine_key],
+            score=round(score, 1),
+            weight=weight,
+            contribution=contribution
+        ))
+    
+    final_score = int(round(total_contribution))
+    
+    return final_score, breakdown
+
 def calculate_trust_score(photo_analysis: Optional[PhotoAnalysisResponse], 
                          chat_analysis: Optional[ChatAnalysisResponse],
-                         metadata_analysis: Optional[MetadataAnalysisResponse] = None) -> tuple[int, str, str, List[str]]:
+                         metadata_analysis: Optional[MetadataAnalysisResponse] = None) -> tuple[int, str, str, List[str], List[WeightedComponent]]:
     insights = []
     
     toneshift_score = 100
@@ -451,14 +589,9 @@ def calculate_trust_score(photo_analysis: Optional[PhotoAnalysisResponse],
         if photo_analysis.metadata_issues:
             insights.append(f"Photo metadata issues detected ({len(photo_analysis.metadata_issues)} problems)")
     
-    weighted_score = (
-        (toneshift_score * 0.50) +
-        (walletwatch_score * 0.30) +
-        (photo_score * 0.15) +
-        (metadata_score * 0.05)
+    final_score, weighted_breakdown = compute_weighted_trust_score(
+        toneshift_score, walletwatch_score, photo_score, metadata_score
     )
-    
-    final_score = int(round(weighted_score))
     
     if final_score >= 70:
         color_band = "green"
@@ -470,7 +603,7 @@ def calculate_trust_score(photo_analysis: Optional[PhotoAnalysisResponse],
         color_band = "red"
         confidence = "Low"
     
-    return final_score, confidence, color_band, insights[:3]
+    return final_score, confidence, color_band, insights, weighted_breakdown[:3]
 
 @app.get("/healthz")
 async def healthz():
@@ -592,6 +725,9 @@ async def generate_trust_score(
     photo_file: Optional[UploadFile] = File(None),
     chat_messages: Optional[str] = Form(None),
     profile_id: Optional[str] = Form(None),
+    phone_number: Optional[str] = Form(None),
+    scammer_profile_json: Optional[str] = Form(None),
+    conversation_id: Optional[str] = Form(None),
     db: Session = Depends(get_db)
 ):
     photo_analysis = None
@@ -632,14 +768,42 @@ async def generate_trust_score(
         messages_list = [msg.strip() for msg in chat_messages.split("\n") if msg.strip()]
         
         if messages_list:
-            conversation = DBConversation(id=str(uuid.uuid4()))
-            db.add(conversation)
-            db.flush()
+            phone_code = normalize_phone_number(phone_number) if phone_number else None
             
-            prev_final_score = calculate_trust_score(photo_analysis, None, metadata_analysis)[0]
-            prev_toneshift_contrib = 50
+            if conversation_id:
+                conversation = db.query(DBConversation).filter(DBConversation.id == conversation_id).first()
+                if not conversation:
+                    raise HTTPException(status_code=404, detail=f"Conversation {conversation_id} not found")
+                
+                last_point = db.query(DBAnalysisPoint).filter(
+                    DBAnalysisPoint.conversation_id == conversation_id
+                ).order_by(DBAnalysisPoint.message_index.desc()).first()
+                
+                starting_index = (last_point.message_index + 1) if last_point else 1
+                
+                all_previous_points = db.query(DBAnalysisPoint).filter(
+                    DBAnalysisPoint.conversation_id == conversation_id
+                ).order_by(DBAnalysisPoint.message_index).all()
+                
+                prev_final_score = conversation.final_trust_score if conversation.final_trust_score else 50
+                
+                if all_previous_points:
+                    last_messages = [{"sender": "user", "text": p.message_text} for p in all_previous_points]
+                    last_analysis = toneshift_engine.analyze_conversation(last_messages)
+                    prev_toneshift_contrib = round(int((1 - last_analysis["emotional_manipulation_index"]) * 100) * 0.50)
+                else:
+                    prev_toneshift_contrib = 50
+            else:
+                # Create new conversation
+                conversation = DBConversation(id=str(uuid.uuid4()), phone_code=phone_code)
+                db.add(conversation)
+                db.flush()
+                
+                starting_index = 1
+                prev_final_score = calculate_trust_score(photo_analysis, None, metadata_analysis)[0]
+                prev_toneshift_contrib = 50
             
-            for i, msg_text in enumerate(messages_list, start=1):
+            for i, msg_text in enumerate(messages_list, start=starting_index):
                 messages_prefix = [{"sender": "user", "text": m} for m in messages_list[:i]]
                 analysis_i = toneshift_engine.analyze_conversation(messages_prefix)
                 
@@ -779,23 +943,199 @@ async def generate_trust_score(
             )
             db.add(db_pattern)
     
+    if scammer_profile_json and conversation:
+        import json
+        try:
+            profile_data = json.loads(scammer_profile_json)
+            profile_input = ScammerProfileInput(**profile_data)
+            
+            scammer_profile = db.query(DBScammerProfile).filter(
+                DBScammerProfile.conversation_id == conversation.id
+            ).first()
+            
+            if scammer_profile:
+                scammer_profile.claimed_name = profile_input.claimed_name
+                scammer_profile.aliases = profile_input.aliases
+                scammer_profile.claimed_dob = profile_input.claimed_dob
+                scammer_profile.claimed_address = profile_input.claimed_address
+                scammer_profile.claimed_occupation = profile_input.claimed_occupation
+                scammer_profile.phone_numbers = profile_input.phone_numbers
+                scammer_profile.email_addresses = profile_input.email_addresses
+                scammer_profile.platform_met = profile_input.platform_met
+                scammer_profile.first_contact_date = profile_input.first_contact_date
+                scammer_profile.last_contact_date = profile_input.last_contact_date
+                scammer_profile.communication_channels = profile_input.communication_channels
+                scammer_profile.total_amount_requested = profile_input.total_amount_requested
+                scammer_profile.total_amount_sent = profile_input.total_amount_sent
+                scammer_profile.currency = profile_input.currency
+                scammer_profile.victim_narrative = profile_input.victim_narrative
+                scammer_profile.ic3_complaint_number = profile_input.ic3_complaint_number
+                scammer_profile.ftc_report_id = profile_input.ftc_report_id
+                scammer_profile.police_incident_number = profile_input.police_incident_number
+                scammer_profile.other_agency_references = profile_input.other_agency_references
+                
+                db.query(DBSocialHandle).filter(
+                    DBSocialHandle.scammer_profile_id == scammer_profile.id
+                ).delete()
+                db.query(DBPaymentInstruction).filter(
+                    DBPaymentInstruction.scammer_profile_id == scammer_profile.id
+                ).delete()
+            else:
+                scammer_profile = DBScammerProfile(
+                    id=str(uuid.uuid4()),
+                    conversation_id=conversation.id,
+                    claimed_name=profile_input.claimed_name,
+                    aliases=profile_input.aliases,
+                    claimed_dob=profile_input.claimed_dob,
+                    claimed_address=profile_input.claimed_address,
+                    claimed_occupation=profile_input.claimed_occupation,
+                    phone_numbers=profile_input.phone_numbers,
+                    email_addresses=profile_input.email_addresses,
+                    platform_met=profile_input.platform_met,
+                    first_contact_date=profile_input.first_contact_date,
+                    last_contact_date=profile_input.last_contact_date,
+                    communication_channels=profile_input.communication_channels,
+                    total_amount_requested=profile_input.total_amount_requested,
+                    total_amount_sent=profile_input.total_amount_sent,
+                    currency=profile_input.currency,
+                    victim_narrative=profile_input.victim_narrative,
+                    ic3_complaint_number=profile_input.ic3_complaint_number,
+                    ftc_report_id=profile_input.ftc_report_id,
+                    police_incident_number=profile_input.police_incident_number,
+                    other_agency_references=profile_input.other_agency_references
+                )
+                db.add(scammer_profile)
+            
+            db.flush()
+            
+            if profile_input.social_handles:
+                for handle_input in profile_input.social_handles:
+                    social_handle = DBSocialHandle(
+                        scammer_profile_id=scammer_profile.id,
+                        platform=handle_input.platform,
+                        username=handle_input.username,
+                        profile_url=handle_input.profile_url,
+                        profile_id=handle_input.profile_id,
+                        notes=handle_input.notes
+                    )
+                    db.add(social_handle)
+            
+            if profile_input.payment_instructions:
+                for payment_input in profile_input.payment_instructions:
+                    payment_instruction = DBPaymentInstruction(
+                        scammer_profile_id=scammer_profile.id,
+                        method=payment_input.method,
+                        bank_name=payment_input.bank_name,
+                        account_holder_name=payment_input.account_holder_name,
+                        account_number=payment_input.account_number,
+                        routing_number=payment_input.routing_number,
+                        swift_code=payment_input.swift_code,
+                        iban=payment_input.iban,
+                        receiver_name=payment_input.receiver_name,
+                        receiver_city=payment_input.receiver_city,
+                        receiver_country=payment_input.receiver_country,
+                        pickup_location=payment_input.pickup_location,
+                        app_handle=payment_input.app_handle,
+                        crypto_chain=payment_input.crypto_chain,
+                        crypto_address=payment_input.crypto_address,
+                        crypto_memo=payment_input.crypto_memo,
+                        exchange_platform=payment_input.exchange_platform,
+                        exchange_uid=payment_input.exchange_uid,
+                        gift_card_brand=payment_input.gift_card_brand,
+                        gift_card_amount=payment_input.gift_card_amount,
+                        amount_requested=payment_input.amount_requested,
+                        notes=payment_input.notes
+                    )
+                    db.add(payment_instruction)
+        except Exception as e:
+            print(f"⚠️ Error saving scammer profile: {str(e)}")
+    
     db.commit()
     db.refresh(db_report)
     
-    if trust_score < 50 and conversation:
-        from app.models.database import TrustedContact
+    if conversation:
+        from app.models.database import TrustedContact, AlertLog
+        from datetime import timedelta
         
-        # Log potential alert for all linked trusted contacts
         contacts = db.query(TrustedContact).filter(
             TrustedContact.user_identifier == conversation.id,
             TrustedContact.is_active == True
         ).all()
         
         if contacts:
-            print(f"⚠️ Guardian Mode Alert: Trust score {trust_score} below threshold for conversation {conversation.id}")
-            print(f"📧 Would notify {len(contacts)} trusted contact(s):")
+            financial_patterns = []
+            if chat_analysis and chat_analysis.manipulation_patterns:
+                financial_patterns = [
+                    p for p in chat_analysis.manipulation_patterns 
+                    if p.pattern_type in ["Financial Request", "Cryptocurrency Request", "Gift Card Request"]
+                ]
+            
             for contact in contacts:
-                print(f"   - {contact.contact_name} ({contact.contact_email_or_phone}) via {contact.alert_preference}")
+                threshold = contact.alert_threshold or 40
+                should_alert = False
+                alert_reason = ""
+                
+                if financial_patterns:
+                    should_alert = True
+                    alert_reason = f"Financial manipulation detected: {', '.join([p.pattern_type for p in financial_patterns])}"
+                elif trust_score < threshold:
+                    should_alert = True
+                    alert_reason = f"Trust score {trust_score} below threshold {threshold}"
+                
+                if should_alert:
+                    cooldown_minutes = 60
+                    if contact.last_alert_timestamp:
+                        time_since_last = datetime.utcnow() - contact.last_alert_timestamp
+                        if time_since_last < timedelta(minutes=cooldown_minutes):
+                            print(f"⏱️ Cooldown active for {contact.contact_name} ({int((timedelta(minutes=cooldown_minutes) - time_since_last).total_seconds() / 60)} min remaining)")
+                            continue
+                    
+                    alert_log = AlertLog(
+                        contact_id=contact.id,
+                        user_identifier=conversation.id,
+                        conversation_id=conversation.id,
+                        trust_score=trust_score,
+                        threshold=threshold,
+                        channel='EMAIL' if contact.contact_email else 'SMS' if contact.contact_phone else 'N/A',
+                        reason=alert_reason,
+                        status='LOGGED'
+                    )
+                    db.add(alert_log)
+                    
+                    contact.last_alert_timestamp = datetime.utcnow()
+                    
+                    print(f"⚠️ Guardian Mode Alert: {alert_reason} for conversation {conversation.id}")
+                    print(f"📧 Logged alert for {contact.contact_name} ({contact.contact_email or contact.contact_phone})")
+            
+            db.commit()
+    
+    safety_nudges = []
+    if chat_analysis:
+        manipulation_patterns_list = [
+            {
+                "pattern_type": p.pattern_type,
+                "severity": p.severity,
+                "evidence": p.evidence
+            }
+            for p in chat_analysis.manipulation_patterns
+        ]
+        
+        has_financial_request = any(
+            p.pattern_type in ["Financial Request", "Cryptocurrency Request", "Gift Card Request"]
+            for p in chat_analysis.manipulation_patterns
+        )
+        
+        conversation_length = len(conversation.analysis_points) if conversation else 0
+        
+        nudges = generate_safety_nudges(
+            trust_score=trust_score,
+            emi=chat_analysis.emotional_manipulation_index,
+            has_financial_request=has_financial_request,
+            manipulation_patterns=manipulation_patterns_list,
+            conversation_length=conversation_length
+        )
+        
+        safety_nudges = [nudge.dict() for nudge in nudges]
     
     report = TrustScoreReport(
         report_id=report_id,
@@ -806,7 +1146,9 @@ async def generate_trust_score(
         photo_analysis=photo_analysis,
         chat_analysis=chat_analysis,
         created_at=db_report.created_at.isoformat(),
-        conversation_id=conversation.id if conversation else None
+        conversation_id=conversation.id if conversation else None,
+        weighted_breakdown=weighted_breakdown,
+        safety_nudges=safety_nudges
     )
     
     return report
@@ -1061,6 +1403,10 @@ async def generate_evidence_report(
             GeographicRisk.code == normalized_code
         ).first()
     
+    scammer_profile = None
+    if hasattr(conversation, 'scammer_profile') and conversation.scammer_profile:
+        scammer_profile = conversation.scammer_profile
+    
     app_version = os.getenv("APP_VERSION", "1.0.0")
     backend_version = os.getenv("BACKEND_VERSION", "1.0.0")
     
@@ -1068,6 +1414,7 @@ async def generate_evidence_report(
         conversation, 
         analysis_points, 
         geographic_risk,
+        scammer_profile,
         app_version,
         backend_version
     )
@@ -1089,7 +1436,8 @@ async def generate_evidence_report(
         pdf_buffer,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": f"attachment; filename={filename}"
+            "Content-Disposition": f"attachment; filename={filename}",
+            "X-Report-Hash": dataset_hash
         }
     )
 
@@ -1180,22 +1528,24 @@ async def get_safety_replies(
     }
 
 
+class TrustedContactInput(BaseModel):
+    user_identifier: str
+    contact_name: str
+    contact_email: str
+    contact_phone: Optional[str] = None
+    alert_threshold: Optional[int] = 40
+    escalation_order: Optional[int] = 1
+
 @app.post("/guardian/contact/add")
 async def add_trusted_contact(
-    user_identifier: str,
-    contact_name: str,
-    contact_email_or_phone: str,
-    alert_preference: str = 'EMAIL',
+    contact: TrustedContactInput,
     db: Session = Depends(get_db)
 ):
     """
     Add a trusted contact for Guardian Mode alerts.
     
     Args:
-        user_identifier: User ID or conversation ID
-        contact_name: Name of the trusted contact
-        contact_email_or_phone: Email or phone number for alerts
-        alert_preference: Alert method (EMAIL, SMS, NONE)
+        contact: Trusted contact details (JSON body)
         db: Database session
         
     Returns:
@@ -1204,10 +1554,12 @@ async def add_trusted_contact(
     from app.models.database import TrustedContact
     
     trusted_contact = TrustedContact(
-        user_identifier=user_identifier,
-        contact_name=contact_name,
-        contact_email_or_phone=contact_email_or_phone,
-        alert_preference=alert_preference,
+        user_identifier=contact.user_identifier,
+        contact_name=contact.contact_name,
+        contact_email=contact.contact_email,
+        contact_phone=contact.contact_phone,
+        contact_email_or_phone=contact.contact_email,
+        alert_threshold=contact.alert_threshold or 40,
         is_active=True
     )
     
@@ -1219,8 +1571,9 @@ async def add_trusted_contact(
         "id": trusted_contact.id,
         "user_identifier": trusted_contact.user_identifier,
         "contact_name": trusted_contact.contact_name,
-        "contact_email_or_phone": trusted_contact.contact_email_or_phone,
-        "alert_preference": trusted_contact.alert_preference,
+        "contact_email": trusted_contact.contact_email,
+        "contact_phone": trusted_contact.contact_phone,
+        "alert_threshold": trusted_contact.alert_threshold,
         "is_active": trusted_contact.is_active,
         "created_at": trusted_contact.created_at.isoformat() + "Z"
     }
@@ -1254,11 +1607,322 @@ async def get_trusted_contacts(
             {
                 "id": contact.id,
                 "contact_name": contact.contact_name,
-                "contact_email_or_phone": contact.contact_email_or_phone,
-                "alert_preference": contact.alert_preference,
+                "contact_email": contact.contact_email,
+                "contact_phone": contact.contact_phone,
+                "alert_threshold": contact.alert_threshold,
+                "is_active": contact.is_active,
                 "last_alert_timestamp": contact.last_alert_timestamp.isoformat() + "Z" if contact.last_alert_timestamp else None,
                 "created_at": contact.created_at.isoformat() + "Z"
             }
             for contact in contacts
         ]
     }
+
+@app.delete("/guardian/contact/{contact_id}")
+async def delete_trusted_contact(
+    contact_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Delete (deactivate) a trusted contact.
+    
+    Args:
+        contact_id: Contact ID to delete
+        db: Database session
+        
+    Returns:
+        Success message
+    """
+    from app.models.database import TrustedContact
+    
+    contact = db.query(TrustedContact).filter(TrustedContact.id == contact_id).first()
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    
+    contact.is_active = False
+    db.commit()
+    
+    return {"success": True, "message": "Contact deactivated"}
+
+@app.get("/guardian/alerts/{user_identifier}")
+async def get_alert_history(
+    user_identifier: str,
+    limit: Optional[int] = 50,
+    db: Session = Depends(get_db)
+):
+    """
+    Get alert history for a user.
+    
+    Args:
+        user_identifier: User ID or conversation ID
+        limit: Maximum number of alerts to return (default 50)
+        db: Database session
+        
+    Returns:
+        List of alert log entries
+    """
+    from app.models.database import AlertLog, TrustedContact
+    
+    alerts = db.query(AlertLog).filter(
+        AlertLog.user_identifier == user_identifier
+    ).order_by(AlertLog.created_at.desc()).limit(limit).all()
+    
+    result = []
+    for alert in alerts:
+        contact = db.query(TrustedContact).filter(TrustedContact.id == alert.contact_id).first()
+        result.append({
+            "id": alert.id,
+            "contact_name": contact.contact_name if contact else "Unknown",
+            "contact_email": contact.contact_email if contact else None,
+            "trust_score": alert.trust_score,
+            "threshold": alert.threshold,
+            "channel": alert.channel,
+            "reason": alert.reason,
+            "status": alert.status,
+            "created_at": alert.created_at.isoformat() + "Z"
+        })
+    
+    return {
+        "user_identifier": user_identifier,
+        "alerts": result,
+        "total": len(result)
+    }
+
+@app.get("/ip/intel", response_model=IPIntelligenceResponse)
+async def get_ip_intelligence(ip: str):
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(f"https://ipwho.is/{ip}")
+            
+            if response.status_code != 200:
+                return IPIntelligenceResponse(
+                    ip=ip,
+                    success=False,
+                    message="Failed to fetch IP intelligence"
+                )
+            
+            data = response.json()
+            
+            if not data.get("success", False):
+                return IPIntelligenceResponse(
+                    ip=ip,
+                    success=False,
+                    message=data.get("message", "IP lookup failed")
+                )
+            
+            security = data.get("security", {})
+            is_vpn = security.get("is_vpn", False)
+            is_proxy = security.get("is_proxy", False)
+            is_tor = security.get("is_tor", False)
+            is_datacenter = security.get("is_datacenter", False)
+            
+            risk_score = 0
+            if is_tor:
+                risk_score = 90
+            elif is_vpn or is_proxy:
+                risk_score = 70
+            elif is_datacenter:
+                risk_score = 50
+            else:
+                risk_score = 10
+            
+            if risk_score >= 70:
+                risk_level = "High"
+            elif risk_score >= 40:
+                risk_level = "Medium"
+            else:
+                risk_level = "Low"
+            
+            return IPIntelligenceResponse(
+                ip=ip,
+                success=True,
+                country=data.get("country"),
+                country_code=data.get("country_code"),
+                region=data.get("region"),
+                city=data.get("city"),
+                latitude=data.get("latitude"),
+                longitude=data.get("longitude"),
+                isp=data.get("connection", {}).get("isp"),
+                organization=data.get("connection", {}).get("org"),
+                asn=data.get("connection", {}).get("asn"),
+                is_vpn=is_vpn,
+                is_proxy=is_proxy,
+                is_tor=is_tor,
+                is_datacenter=is_datacenter,
+                risk_score=risk_score,
+                risk_level=risk_level
+            )
+    except httpx.TimeoutException:
+        return IPIntelligenceResponse(
+            ip=ip,
+            success=False,
+            message="IP intelligence service timeout"
+        )
+    except Exception as e:
+        return IPIntelligenceResponse(
+            ip=ip,
+            success=False,
+            message=f"Error: {str(e)}"
+        )
+
+@app.get("/safepay/checklist")
+async def get_safepay_checklist_endpoint(amount: Optional[float] = None):
+    """
+    Get SafePay™ checklist for financial transactions.
+    
+    Args:
+        amount: Optional transaction amount
+        
+    Returns:
+        SafePay checklist with verification steps
+    """
+    return get_safepay_checklist(amount)
+
+@app.get("/usage/status")
+async def get_usage_status(user_id: Optional[str] = None, email: Optional[str] = None, db: Session = Depends(get_db)):
+    """Get usage status for a user."""
+    user = get_or_create_user(db, email=email, user_id=user_id)
+    usage_status = check_usage_limit(db, user)
+    return {"user_id": user.id, "email": user.email, "tier": user.subscription_tier, "usage": usage_status, "features": get_tier_features(user.subscription_tier)}
+
+@app.get("/tiers")
+async def get_subscription_tiers():
+    """Get all available subscription tiers."""
+    from app.usage_tracking import TIER_LIMITS
+    return {"tiers": [
+        {"id": "free", "name": "Safety Starter", "price": 0, "billing_period": "month", "monthly_scans": TIER_LIMITS["free"]["monthly_scans"], "features": TIER_LIMITS["free"]["features"], "description": "Essential protection for cautious daters"},
+        {"id": "plus", "name": "Protector", "price": 7.99, "billing_period": "month", "monthly_scans": TIER_LIMITS["plus"]["monthly_scans"], "features": TIER_LIMITS["plus"]["features"], "description": "Advanced AI analysis and Guardian Mode"},
+        {"id": "premium", "name": "Guardian", "price": 14.99, "billing_period": "month", "monthly_scans": TIER_LIMITS["premium"]["monthly_scans"], "features": TIER_LIMITS["premium"]["features"], "description": "Complete protection with identity verification"},
+        {"id": "family", "name": "FamilyLink", "price": 24.99, "billing_period": "month", "monthly_scans": TIER_LIMITS["family"]["monthly_scans"], "features": TIER_LIMITS["family"]["features"], "description": "Protect your whole family with shared dashboard"}
+    ]}
+
+@app.post("/auth/register")
+async def register_user(email: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
+    """Register a new user with email and password."""
+    from app.auth import create_user, create_session
+    try:
+        user = create_user(db, email, password)
+        session_token = create_session(user.id, user.email)
+        return {"success": True, "user_id": user.id, "email": user.email, "session_token": session_token}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/auth/login")
+async def login_user(email: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
+    """Login with email and password."""
+    from app.auth import authenticate_user, create_session
+    user = authenticate_user(db, email, password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    session_token = create_session(user.id, user.email)
+    return {"success": True, "user_id": user.id, "email": user.email, "session_token": session_token}
+
+@app.post("/auth/magic-link")
+async def request_magic_link(email: str = Form(...), db: Session = Depends(get_db)):
+    """Request a magic link for passwordless login."""
+    from app.auth import create_magic_link
+    token = create_magic_link(db, email)
+    return {"success": True, "message": "Magic link sent to email", "token": token}
+
+@app.post("/auth/verify-magic-link")
+async def verify_magic_link_endpoint(token: str = Form(...)):
+    """Verify a magic link token."""
+    from app.auth import verify_magic_link, create_session
+    user_data = verify_magic_link(token)
+    if not user_data:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    session_token = create_session(user_data["user_id"], user_data["email"])
+    return {"success": True, "user_id": user_data["user_id"], "email": user_data["email"], "session_token": session_token}
+
+@app.post("/auth/logout")
+async def logout_user(session_token: str = Form(...)):
+    """Logout and invalidate session."""
+    from app.auth import invalidate_session
+    success = invalidate_session(session_token)
+    return {"success": success}
+
+@app.get("/auth/verify-session")
+async def verify_session_endpoint(session_token: str):
+    """Verify a session token."""
+    from app.auth import verify_session
+    session_data = verify_session(session_token)
+    if not session_data:
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+    return {"success": True, "user_id": session_data["user_id"], "email": session_data["email"]}
+
+@app.post("/stripe/create-checkout")
+async def create_stripe_checkout(user_id: int = Form(...), tier: str = Form(...), success_url: str = Form("https://heart-guard-mvp-2.vercel.app/success"), cancel_url: str = Form("https://heart-guard-mvp-2.vercel.app/pricing"), db: Session = Depends(get_db)):
+    """Create Stripe checkout session for subscription."""
+    from app.stripe_integration import create_checkout_session
+    result = create_checkout_session(db, user_id, tier, success_url, cancel_url)
+    return result
+
+@app.post("/stripe/create-portal")
+async def create_stripe_portal(user_id: int = Form(...), return_url: str = Form("https://heart-guard-mvp-2.vercel.app/account"), db: Session = Depends(get_db)):
+    """Create Stripe customer portal session."""
+    from app.stripe_integration import create_customer_portal_session
+    result = create_customer_portal_session(db, user_id, return_url)
+    return result
+
+@app.post("/stripe/webhook")
+async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
+    """Handle Stripe webhook events."""
+    from app.stripe_integration import handle_webhook_event, verify_webhook_signature
+    payload = await request.body()
+    signature = request.headers.get("stripe-signature", "")
+    if not verify_webhook_signature(payload, signature):
+        raise HTTPException(status_code=400, detail="Invalid signature")
+    import json
+    event = json.loads(payload)
+    result = handle_webhook_event(db, event.get("type"), event.get("data"))
+    return result
+
+@app.post("/community/report-scammer")
+async def report_scammer_endpoint(user_id: int = Form(...), photo_hash: Optional[str] = Form(None), db: Session = Depends(get_db)):
+    from app.community_intelligence import report_scammer
+    return report_scammer(db, user_id, photo_hash, None, None, None, None)
+
+@app.get("/community/check")
+async def check_community_intelligence_endpoint(photo_hash: Optional[str] = None):
+    from app.community_intelligence import check_community_intelligence
+    return check_community_intelligence(photo_hash, None, None, None)
+
+@app.get("/community/stats")
+async def get_community_stats_endpoint():
+    from app.community_intelligence import get_community_stats
+    return get_community_stats()
+
+@app.post("/crypto/screen-address")
+async def screen_crypto_address_endpoint(address: str = Form(...), currency: str = Form(...)):
+    from app.crypto_screening import screen_crypto_address
+    return screen_crypto_address(address, currency)
+
+@app.get("/crypto/safety-tips")
+async def get_crypto_safety_tips_endpoint():
+    from app.crypto_screening import get_crypto_safety_tips
+    return {"tips": get_crypto_safety_tips()}
+
+@app.post("/privacy/set-retention")
+async def set_retention_policy_endpoint(user_id: int = Form(...), retention_days: int = Form(...), db: Session = Depends(get_db)):
+    from app.privacy_controls import set_retention_policy
+    return set_retention_policy(db, user_id, retention_days)
+
+@app.get("/privacy/export")
+async def export_user_data_endpoint(user_id: int, db: Session = Depends(get_db)):
+    from app.privacy_controls import export_user_data
+    return export_user_data(db, user_id)
+
+@app.get("/accessibility/settings")
+async def get_accessibility_settings_endpoint():
+    from app.accessibility import get_accessibility_settings
+    return get_accessibility_settings()
+
+@app.get("/accessibility/emergency-contacts")
+async def get_emergency_contacts_endpoint():
+    from app.accessibility import get_emergency_contacts
+    return {"contacts": get_emergency_contacts()}
+
+@app.get("/accessibility/simplified")
+async def get_simplified_explanation_endpoint(trust_score: int):
+    from app.accessibility import get_simplified_explanation
+    return get_simplified_explanation(trust_score)

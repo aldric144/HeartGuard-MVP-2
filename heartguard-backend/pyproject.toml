@@ -21,6 +21,7 @@ psycopg2-binary = "^2.9.11"
 numpy = "^2.2.1"
 fpdf2 = "^2.8.5"
 qrcode = "^8.2"
+httpx = "^0.28.1"
 
 
 [build-system]
