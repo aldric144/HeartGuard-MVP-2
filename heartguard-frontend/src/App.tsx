@@ -14,6 +14,7 @@ import { GuardianMode } from '@/components/GuardianMode'
 import { BottomTabs } from '@/components/BottomTabs'
 import { FamilyLink } from '@/pages/FamilyLink'
 import { More } from '@/pages/More'
+import { Guardian } from '@/pages/Guardian'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -560,9 +561,10 @@ Please send me $500 right now via crypto!`
       <div className="relative z-10 container mx-auto px-4 py-8 max-w-6xl pb-20 md:ml-64 md:pb-8">
         {/* Guardian Tab */}
         {activeTab === 'guardian' && (
-          <div className="animate-fade-in">
-            <GuardianMode />
-          </div>
+          <Guardian 
+            conversationId={report?.conversation_id} 
+            onNavigateToFamily={() => setActiveTab('family')}
+          />
         )}
         
         {/* Family Tab */}
