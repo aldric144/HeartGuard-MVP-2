@@ -15,6 +15,9 @@ import { BottomTabs } from '@/components/BottomTabs'
 import { FamilyLink } from '@/pages/FamilyLink'
 import { More } from '@/pages/More'
 import { Guardian } from '@/pages/Guardian'
+import { WarningBanner } from '@/components/WarningBanner'
+import { LegalAcceptanceModal, checkLegalAcceptance } from '@/components/LegalAcceptanceModal'
+import { LegalDisclaimer } from '@/components/LegalDisclaimer'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -189,6 +192,7 @@ function App() {
   const [showReportHistory, setShowReportHistory] = useState(false)
   const [selectedPersonForHistory, setSelectedPersonForHistory] = useState<string | null>(null)
   const [loadingReport, setLoadingReport] = useState(false)
+  const [showLegalModal, setShowLegalModal] = useState(!checkLegalAcceptance())
   
   const [socialInstagram, setSocialInstagram] = useState('')
   const [socialFacebook, setSocialFacebook] = useState('')
@@ -685,7 +689,7 @@ Please send me $500 right now via crypto!`
 
   const handleDownloadEvidenceReport = async () => {
     if (!report?.conversation_id) {
-      setError('No conversation ID available for this report')
+      console.error('No conversation ID available for this report')
       return
     }
 
@@ -712,7 +716,7 @@ Please send me $500 right now via crypto!`
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to download evidence report')
+      console.error('Failed to download evidence report:', err)
     } finally {
       setDownloadingPdf(false)
     }
@@ -720,6 +724,11 @@ Please send me $500 right now via crypto!`
 
   return (
     <div className="relative min-h-screen bg-gradient-to-br from-[#5B3256] via-[#3C4B7C] to-[#E6B7BE] parallax-bg" style={{ fontFamily: "'Source Sans Pro', sans-serif" }}>
+      {/* Legal Acceptance Modal */}
+      {showLegalModal && (
+        <LegalAcceptanceModal onAccept={() => setShowLegalModal(false)} />
+      )}
+      
       <BottomTabs 
         activeTab={activeTab} 
         onTabChange={setActiveTab} 
@@ -1430,6 +1439,18 @@ Please send me $500 right now via crypto!`
 
         {report && (
           <div className="space-y-6">
+            {/* Warning Banner */}
+            <WarningBanner 
+              trustScore={report.trust_score}
+              hasCriticalPatterns={
+                report.chat_analysis?.manipulation_patterns?.some(
+                  p => p.pattern_type === 'Financial Request' || 
+                       p.pattern_type === 'Cryptocurrency Request' ||
+                       p.severity === 'Critical'
+                ) || false
+              }
+            />
+            
             <Card className={`border-4 ${getTrustScoreBg(report.trust_score)}`}>
               <CardHeader>
                 <CardTitle className="text-center text-3xl">Trust Score Report</CardTitle>
@@ -1478,6 +1499,9 @@ Please send me $500 right now via crypto!`
                     </div>
                   </div>
                 )}
+                
+                {/* Trust Score Disclaimer */}
+                <LegalDisclaimer variant="inline" context="trustscore" />
               </CardContent>
             </Card>
 
@@ -1510,6 +1534,9 @@ Please send me $500 right now via crypto!`
                       </>
                     )}
                   </Button>
+                  
+                  {/* Evidence Locker Disclaimer */}
+                  <LegalDisclaimer variant="inline" context="evidence" />
 
                   <Button
                     onClick={() => setShowGuardianMode(true)}
@@ -1916,6 +1943,31 @@ Please send me $500 right now via crypto!`
           </p>
           <p className="opacity-90">HeartGuard™ - Empowering safer connections through compassionate AI</p>
         </div>
+        
+        {/* Footer with Legal Links */}
+        <footer className="mt-12 pt-6 border-t border-white/20 text-center text-white/80 text-sm">
+          <div className="flex justify-center gap-6 mb-4">
+            <a href="/legal/terms-of-service" target="_blank" className="hover:text-white underline">
+              Terms of Service
+            </a>
+            <a href="/legal/privacy-policy" target="_blank" className="hover:text-white underline">
+              Privacy Policy
+            </a>
+            <a href="mailto:legal@heartguard.app" className="hover:text-white underline">
+              Contact Legal
+            </a>
+          </div>
+          <div className="text-xs text-white/60 max-w-3xl mx-auto">
+            <p className="mb-2">
+              <strong>Disclaimer:</strong> HeartGuard™ provides AI-powered analysis for informational purposes only. 
+              Not legal, financial, or professional advice. No guarantee of accuracy. Not a Consumer Reporting Agency. 
+              Not for FCRA-regulated purposes. Always verify information independently and contact authorities for suspected crimes.
+            </p>
+          </div>
+          <p className="mt-3 text-xs text-white/50">
+            © 2025 HeartGuard™. All rights reserved. | Version 1.0
+          </p>
+        </footer>
           </>
         )}
       </div>
