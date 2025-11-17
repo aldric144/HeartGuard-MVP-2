@@ -31,8 +31,8 @@ interface AlertLog {
 }
 
 interface GuardianModeProps {
-  conversationId: string
-  onClose: () => void
+  conversationId?: string
+  onClose?: () => void
 }
 
 export function GuardianMode({ conversationId, onClose }: GuardianModeProps) {
@@ -49,6 +49,10 @@ export function GuardianMode({ conversationId, onClose }: GuardianModeProps) {
   const [newContactThreshold, setNewContactThreshold] = useState(40)
 
   const fetchContacts = async () => {
+    if (!conversationId) {
+      setContacts([])
+      return
+    }
     setLoading(true)
     setError(null)
     try {
@@ -67,6 +71,10 @@ export function GuardianMode({ conversationId, onClose }: GuardianModeProps) {
   }
 
   const fetchAlerts = async () => {
+    if (!conversationId) {
+      setAlerts([])
+      return
+    }
     setLoading(true)
     setError(null)
     try {
@@ -99,7 +107,7 @@ export function GuardianMode({ conversationId, onClose }: GuardianModeProps) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          user_identifier: conversationId,
+          user_identifier: conversationId || 'global',
           contact_name: newContactName,
           contact_email: newContactEmail,
           contact_phone: newContactPhone || null,
@@ -180,14 +188,16 @@ export function GuardianMode({ conversationId, onClose }: GuardianModeProps) {
                 </div>
               </div>
             </div>
-            <Button
-              onClick={onClose}
-              variant="ghost"
-              size="sm"
-              className="text-[#5B3256] hover:bg-[#E6B7BE]/20"
-            >
-              <X className="w-5 h-5" />
-            </Button>
+            {onClose && (
+              <Button
+                onClick={onClose}
+                variant="ghost"
+                size="sm"
+                className="text-[#5B3256] hover:bg-[#E6B7BE]/20"
+              >
+                <X className="w-5 h-5" />
+              </Button>
+            )}
           </div>
 
           {/* Tab Navigation */}

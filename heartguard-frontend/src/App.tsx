@@ -11,6 +11,9 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { ScamHotspotMap } from '@/components/ScamHotspotMap'
 import { SafetyReplyCard } from '@/components/SafetyReplyCard'
 import { GuardianMode } from '@/components/GuardianMode'
+import { BottomTabs } from '@/components/BottomTabs'
+import { FamilyLink } from '@/pages/FamilyLink'
+import { More } from '@/pages/More'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -116,6 +119,7 @@ interface PeopleStorage {
 }
 
 function App() {
+  const [activeTab, setActiveTab] = useState<'home' | 'results' | 'guardian' | 'family' | 'more'>('home')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [chatMessages, setChatMessages] = useState('')
   const [loading, setLoading] = useState(false)
@@ -547,8 +551,22 @@ Please send me $500 right now via crypto!`
 
   return (
     <div className="relative min-h-screen bg-gradient-to-br from-[#5B3256] via-[#3C4B7C] to-[#E6B7BE] parallax-bg" style={{ fontFamily: "'Source Sans Pro', sans-serif" }}>
+      <BottomTabs 
+        activeTab={activeTab} 
+        onTabChange={setActiveTab} 
+        hasResults={Boolean(report)} 
+      />
       <div className="pointer-events-none fixed inset-0 bg-black/20 z-0"></div>
-      <div className="relative z-10 container mx-auto px-4 py-8 max-w-6xl">
+      <div className="relative z-10 container mx-auto px-4 py-8 max-w-6xl pb-20 md:ml-64 md:pb-8">
+        {/* Family Tab */}
+        {activeTab === 'family' && <FamilyLink />}
+        
+        {/* More Tab */}
+        {activeTab === 'more' && <More />}
+        
+        {/* Home Tab - Original Content */}
+        {activeTab === 'home' && (
+          <>
         <div className="text-center mb-8 animate-fade-in">
           <div className="flex items-center justify-center mb-4">
             <Shield className="w-16 h-16 text-[#E6B7BE] mr-3" />
@@ -1584,6 +1602,8 @@ Please send me $500 right now via crypto!`
           </p>
           <p className="opacity-90">HeartGuard™ - Empowering safer connections through compassionate AI</p>
         </div>
+          </>
+        )}
       </div>
       <audio ref={audioRef} />
       

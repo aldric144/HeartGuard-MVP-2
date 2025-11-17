@@ -1,8 +1,8 @@
-import { Home, FileText, Shield, BookOpen } from 'lucide-react'
+import { Home, FileText, Shield, Users, MoreHorizontal } from 'lucide-react'
 
 interface BottomTabsProps {
-  activeTab: 'home' | 'results' | 'guardian' | 'guide'
-  onTabChange: (tab: 'home' | 'results' | 'guardian' | 'guide') => void
+  activeTab: 'home' | 'results' | 'guardian' | 'family' | 'more'
+  onTabChange: (tab: 'home' | 'results' | 'guardian' | 'family' | 'more') => void
   hasResults: boolean
 }
 
@@ -11,7 +11,8 @@ export function BottomTabs({ activeTab, onTabChange, hasResults }: BottomTabsPro
     { id: 'home' as const, label: 'Home', icon: Home, enabled: true },
     { id: 'results' as const, label: 'Results', icon: FileText, enabled: hasResults },
     { id: 'guardian' as const, label: 'Guardian', icon: Shield, enabled: true },
-    { id: 'guide' as const, label: 'Guide', icon: BookOpen, enabled: true },
+    { id: 'family' as const, label: 'Family', icon: Users, enabled: true },
+    { id: 'more' as const, label: 'More', icon: MoreHorizontal, enabled: true },
   ]
 
   return (
