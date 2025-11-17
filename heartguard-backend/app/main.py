@@ -1876,3 +1876,53 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     event = json.loads(payload)
     result = handle_webhook_event(db, event.get("type"), event.get("data"))
     return result
+
+@app.post("/community/report-scammer")
+async def report_scammer_endpoint(user_id: int = Form(...), photo_hash: Optional[str] = Form(None), db: Session = Depends(get_db)):
+    from app.community_intelligence import report_scammer
+    return report_scammer(db, user_id, photo_hash, None, None, None, None)
+
+@app.get("/community/check")
+async def check_community_intelligence_endpoint(photo_hash: Optional[str] = None):
+    from app.community_intelligence import check_community_intelligence
+    return check_community_intelligence(photo_hash, None, None, None)
+
+@app.get("/community/stats")
+async def get_community_stats_endpoint():
+    from app.community_intelligence import get_community_stats
+    return get_community_stats()
+
+@app.post("/crypto/screen-address")
+async def screen_crypto_address_endpoint(address: str = Form(...), currency: str = Form(...)):
+    from app.crypto_screening import screen_crypto_address
+    return screen_crypto_address(address, currency)
+
+@app.get("/crypto/safety-tips")
+async def get_crypto_safety_tips_endpoint():
+    from app.crypto_screening import get_crypto_safety_tips
+    return {"tips": get_crypto_safety_tips()}
+
+@app.post("/privacy/set-retention")
+async def set_retention_policy_endpoint(user_id: int = Form(...), retention_days: int = Form(...), db: Session = Depends(get_db)):
+    from app.privacy_controls import set_retention_policy
+    return set_retention_policy(db, user_id, retention_days)
+
+@app.get("/privacy/export")
+async def export_user_data_endpoint(user_id: int, db: Session = Depends(get_db)):
+    from app.privacy_controls import export_user_data
+    return export_user_data(db, user_id)
+
+@app.get("/accessibility/settings")
+async def get_accessibility_settings_endpoint():
+    from app.accessibility import get_accessibility_settings
+    return get_accessibility_settings()
+
+@app.get("/accessibility/emergency-contacts")
+async def get_emergency_contacts_endpoint():
+    from app.accessibility import get_emergency_contacts
+    return {"contacts": get_emergency_contacts()}
+
+@app.get("/accessibility/simplified")
+async def get_simplified_explanation_endpoint(trust_score: int):
+    from app.accessibility import get_simplified_explanation
+    return get_simplified_explanation(trust_score)
