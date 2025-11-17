@@ -894,7 +894,7 @@ async def generate_trust_score(
             consistency_issues=consistency_issues
         )
     
-    trust_score, confidence, color_band, insights = calculate_trust_score(photo_analysis, chat_analysis, metadata_analysis)
+    trust_score, confidence, color_band, insights, weighted_breakdown = calculate_trust_score(photo_analysis, chat_analysis, metadata_analysis)
     
     report_id = str(uuid.uuid4())
     
