@@ -12,6 +12,16 @@ class User(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=True)
+    password_hash = Column(String, nullable=True)
+    subscription_tier = Column(String, default="free")  # free, plus, premium, family
+    subscription_status = Column(String, default="active")  # active, cancelled, expired
+    subscription_start_date = Column(DateTime, nullable=True)
+    subscription_end_date = Column(DateTime, nullable=True)
+    stripe_customer_id = Column(String, nullable=True)
+    stripe_subscription_id = Column(String, nullable=True)
+    monthly_scan_count = Column(Integer, default=0)
+    monthly_scan_limit = Column(Integer, default=3)  # free tier default
+    last_reset_date = Column(DateTime, default=datetime.utcnow)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     reports = relationship("TrustReport", back_populates="user")
