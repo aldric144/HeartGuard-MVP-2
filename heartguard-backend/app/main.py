@@ -34,6 +34,7 @@ from app.models.database import (
 from app.toneshift_engine import toneshift_engine
 from app.evidence_locker import generate_evidence_pdf
 from app.alerting import check_and_trigger_alerts
+from app.safety_nudges import generate_safety_nudges, get_safepay_checklist
 import re
 
 load_dotenv()
@@ -138,6 +139,7 @@ class TrustScoreReport(BaseModel):
     created_at: str
     conversation_id: Optional[str] = None
     weighted_breakdown: List[WeightedComponent] = []
+    safety_nudges: List[Dict] = []
 
 class TimelineMessage(BaseModel):
     message_index: int
@@ -1106,6 +1108,34 @@ async def generate_trust_score(
             
             db.commit()
     
+    safety_nudges = []
+    if chat_analysis:
+        manipulation_patterns_list = [
+            {
+                "pattern_type": p.pattern_type,
+                "severity": p.severity,
+                "evidence": p.evidence
+            }
+            for p in chat_analysis.manipulation_patterns
+        ]
+        
+        has_financial_request = any(
+            p.pattern_type in ["Financial Request", "Cryptocurrency Request", "Gift Card Request"]
+            for p in chat_analysis.manipulation_patterns
+        )
+        
+        conversation_length = len(conversation.analysis_points) if conversation else 0
+        
+        nudges = generate_safety_nudges(
+            trust_score=trust_score,
+            emi=chat_analysis.emotional_manipulation_index,
+            has_financial_request=has_financial_request,
+            manipulation_patterns=manipulation_patterns_list,
+            conversation_length=conversation_length
+        )
+        
+        safety_nudges = [nudge.dict() for nudge in nudges]
+    
     report = TrustScoreReport(
         report_id=report_id,
         trust_score=trust_score,
@@ -1116,7 +1146,8 @@ async def generate_trust_score(
         chat_analysis=chat_analysis,
         created_at=db_report.created_at.isoformat(),
         conversation_id=conversation.id if conversation else None,
-        weighted_breakdown=weighted_breakdown
+        weighted_breakdown=weighted_breakdown,
+        safety_nudges=safety_nudges
     )
     
     return report
@@ -1732,3 +1763,16 @@ async def get_ip_intelligence(ip: str):
             success=False,
             message=f"Error: {str(e)}"
         )
+
+@app.get("/safepay/checklist")
+async def get_safepay_checklist_endpoint(amount: Optional[float] = None):
+    """
+    Get SafePay™ checklist for financial transactions.
+    
+    Args:
+        amount: Optional transaction amount
+        
+    Returns:
+        SafePay checklist with verification steps
+    """
+    return get_safepay_checklist(amount)
