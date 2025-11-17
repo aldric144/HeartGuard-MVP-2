@@ -1777,3 +1777,102 @@ async def get_safepay_checklist_endpoint(amount: Optional[float] = None):
         SafePay checklist with verification steps
     """
     return get_safepay_checklist(amount)
+
+@app.get("/usage/status")
+async def get_usage_status(user_id: Optional[str] = None, email: Optional[str] = None, db: Session = Depends(get_db)):
+    """Get usage status for a user."""
+    user = get_or_create_user(db, email=email, user_id=user_id)
+    usage_status = check_usage_limit(db, user)
+    return {"user_id": user.id, "email": user.email, "tier": user.subscription_tier, "usage": usage_status, "features": get_tier_features(user.subscription_tier)}
+
+@app.get("/tiers")
+async def get_subscription_tiers():
+    """Get all available subscription tiers."""
+    from app.usage_tracking import TIER_LIMITS
+    return {"tiers": [
+        {"id": "free", "name": "Safety Starter", "price": 0, "billing_period": "month", "monthly_scans": TIER_LIMITS["free"]["monthly_scans"], "features": TIER_LIMITS["free"]["features"], "description": "Essential protection for cautious daters"},
+        {"id": "plus", "name": "Protector", "price": 7.99, "billing_period": "month", "monthly_scans": TIER_LIMITS["plus"]["monthly_scans"], "features": TIER_LIMITS["plus"]["features"], "description": "Advanced AI analysis and Guardian Mode"},
+        {"id": "premium", "name": "Guardian", "price": 14.99, "billing_period": "month", "monthly_scans": TIER_LIMITS["premium"]["monthly_scans"], "features": TIER_LIMITS["premium"]["features"], "description": "Complete protection with identity verification"},
+        {"id": "family", "name": "FamilyLink", "price": 24.99, "billing_period": "month", "monthly_scans": TIER_LIMITS["family"]["monthly_scans"], "features": TIER_LIMITS["family"]["features"], "description": "Protect your whole family with shared dashboard"}
+    ]}
+
+@app.post("/auth/register")
+async def register_user(email: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
+    """Register a new user with email and password."""
+    from app.auth import create_user, create_session
+    try:
+        user = create_user(db, email, password)
+        session_token = create_session(user.id, user.email)
+        return {"success": True, "user_id": user.id, "email": user.email, "session_token": session_token}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/auth/login")
+async def login_user(email: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
+    """Login with email and password."""
+    from app.auth import authenticate_user, create_session
+    user = authenticate_user(db, email, password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    session_token = create_session(user.id, user.email)
+    return {"success": True, "user_id": user.id, "email": user.email, "session_token": session_token}
+
+@app.post("/auth/magic-link")
+async def request_magic_link(email: str = Form(...), db: Session = Depends(get_db)):
+    """Request a magic link for passwordless login."""
+    from app.auth import create_magic_link
+    token = create_magic_link(db, email)
+    return {"success": True, "message": "Magic link sent to email", "token": token}
+
+@app.post("/auth/verify-magic-link")
+async def verify_magic_link_endpoint(token: str = Form(...)):
+    """Verify a magic link token."""
+    from app.auth import verify_magic_link, create_session
+    user_data = verify_magic_link(token)
+    if not user_data:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    session_token = create_session(user_data["user_id"], user_data["email"])
+    return {"success": True, "user_id": user_data["user_id"], "email": user_data["email"], "session_token": session_token}
+
+@app.post("/auth/logout")
+async def logout_user(session_token: str = Form(...)):
+    """Logout and invalidate session."""
+    from app.auth import invalidate_session
+    success = invalidate_session(session_token)
+    return {"success": success}
+
+@app.get("/auth/verify-session")
+async def verify_session_endpoint(session_token: str):
+    """Verify a session token."""
+    from app.auth import verify_session
+    session_data = verify_session(session_token)
+    if not session_data:
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+    return {"success": True, "user_id": session_data["user_id"], "email": session_data["email"]}
+
+@app.post("/stripe/create-checkout")
+async def create_stripe_checkout(user_id: int = Form(...), tier: str = Form(...), success_url: str = Form("https://heart-guard-mvp-2.vercel.app/success"), cancel_url: str = Form("https://heart-guard-mvp-2.vercel.app/pricing"), db: Session = Depends(get_db)):
+    """Create Stripe checkout session for subscription."""
+    from app.stripe_integration import create_checkout_session
+    result = create_checkout_session(db, user_id, tier, success_url, cancel_url)
+    return result
+
+@app.post("/stripe/create-portal")
+async def create_stripe_portal(user_id: int = Form(...), return_url: str = Form("https://heart-guard-mvp-2.vercel.app/account"), db: Session = Depends(get_db)):
+    """Create Stripe customer portal session."""
+    from app.stripe_integration import create_customer_portal_session
+    result = create_customer_portal_session(db, user_id, return_url)
+    return result
+
+@app.post("/stripe/webhook")
+async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
+    """Handle Stripe webhook events."""
+    from app.stripe_integration import handle_webhook_event, verify_webhook_signature
+    payload = await request.body()
+    signature = request.headers.get("stripe-signature", "")
+    if not verify_webhook_signature(payload, signature):
+        raise HTTPException(status_code=400, detail="Invalid signature")
+    import json
+    event = json.loads(payload)
+    result = handle_webhook_event(db, event.get("type"), event.get("data"))
+    return result
