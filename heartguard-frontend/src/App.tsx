@@ -558,14 +558,21 @@ Please send me $500 right now via crypto!`
       />
       <div className="pointer-events-none fixed inset-0 bg-black/20 z-0"></div>
       <div className="relative z-10 container mx-auto px-4 py-8 max-w-6xl pb-20 md:ml-64 md:pb-8">
+        {/* Guardian Tab */}
+        {activeTab === 'guardian' && (
+          <div className="animate-fade-in">
+            <GuardianMode />
+          </div>
+        )}
+        
         {/* Family Tab */}
         {activeTab === 'family' && <FamilyLink />}
         
         {/* More Tab */}
         {activeTab === 'more' && <More />}
         
-        {/* Home Tab - Original Content */}
-        {activeTab === 'home' && (
+        {/* Home Tab & Results Tab - Original Content */}
+        {(activeTab === 'home' || activeTab === 'results') && (
           <>
         <div className="text-center mb-8 animate-fade-in">
           <div className="flex items-center justify-center mb-4">
