@@ -9,7 +9,7 @@ interface BottomTabsProps {
 export function BottomTabs({ activeTab, onTabChange, hasResults }: BottomTabsProps) {
   const tabs = [
     { id: 'home' as const, label: 'Home', icon: Home, enabled: true },
-    { id: 'results' as const, label: 'Results', icon: FileText, enabled: hasResults },
+    { id: 'results' as const, label: 'Results', icon: FileText, enabled: true },
     { id: 'guardian' as const, label: 'Guardian', icon: Shield, enabled: true },
     { id: 'family' as const, label: 'Family', icon: Users, enabled: true },
     { id: 'more' as const, label: 'More', icon: MoreHorizontal, enabled: true },
