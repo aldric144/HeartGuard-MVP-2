@@ -33,6 +33,7 @@ from app.models.database import (
 )
 from app.toneshift_engine import toneshift_engine
 from app.evidence_locker import generate_evidence_pdf
+from app.alerting import check_and_trigger_alerts
 import re
 
 load_dotenv()
