@@ -124,9 +124,18 @@ interface ConversationMetadata {
   reports: ReportMetadata[]
 }
 
+interface ReportSnapshot {
+  reportId: string
+  conversationId: string
+  timestamp: string
+  trustScore: number
+  reportData: any
+}
+
 interface PeopleStorage {
   people: Record<string, PersonData>
   conversations: Record<string, ConversationMetadata>
+  reportsById: Record<string, ReportSnapshot>
 }
 
 function App() {
@@ -152,7 +161,7 @@ function App() {
   const [victimNarrative, setVictimNarrative] = useState('')
   const audioRef = useRef<HTMLAudioElement | null>(null)
   
-  const [peopleStorage, setPeopleStorage] = useState<PeopleStorage>({ people: {}, conversations: {} })
+  const [peopleStorage, setPeopleStorage] = useState<PeopleStorage>({ people: {}, conversations: {}, reportsById: {} })
   const [currentPersonKey, setCurrentPersonKey] = useState<string | null>(null)
   const [newPersonName, setNewPersonName] = useState('')
   const [newPersonHint, setNewPersonHint] = useState('')
@@ -192,7 +201,45 @@ function App() {
     const stored = localStorage.getItem('heartguard_people')
     if (stored) {
       try {
-        setPeopleStorage(JSON.parse(stored))
+        const parsed = JSON.parse(stored)
+        
+        let needsMigration = false
+        
+        if (!parsed.reportsById) {
+          parsed.reportsById = {}
+          needsMigration = true
+        }
+        
+        Object.keys(parsed.conversations || {}).forEach(convId => {
+          const conv = parsed.conversations[convId]
+          if (!Array.isArray(conv.reports)) {
+            needsMigration = true
+            conv.reports = []
+            if (conv.lastScore !== undefined) {
+              conv.reports.push({
+                reportId: `${convId}-legacy`,
+                conversationId: convId,
+                trustScore: conv.lastScore,
+                timestamp: conv.createdAt || new Date().toISOString(),
+                title: `Legacy Report - ${new Date(conv.createdAt || new Date()).toLocaleDateString()}`
+              })
+            }
+          }
+        })
+        
+        Object.keys(parsed.people || {}).forEach(personKey => {
+          const person = parsed.people[personKey]
+          if (person.reportCount === undefined) {
+            needsMigration = true
+            person.reportCount = person.conversationIds?.length || 0
+          }
+        })
+        
+        setPeopleStorage(parsed)
+        
+        if (needsMigration) {
+          localStorage.setItem('heartguard_people', JSON.stringify(parsed))
+        }
       } catch (e) {
         console.error('Failed to load people storage:', e)
       }
@@ -216,7 +263,7 @@ function App() {
     return `${slug}${hintSlug}`
   }
 
-  const addOrUpdatePerson = (conversationId: string, score: number) => {
+  const addOrUpdatePerson = (conversationId: string, score: number, reportData?: any) => {
     const now = new Date().toISOString()
     const personName = newPersonName.trim() || scammerName.trim() || `Unknown ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}`
     const personKey = isNewPerson ? createPersonKey(personName, newPersonHint) : currentPersonKey!
@@ -229,6 +276,16 @@ function App() {
       trustScore: score,
       timestamp: now,
       title: `Analysis ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}`
+    }
+    
+    if (reportData) {
+      updatedStorage.reportsById[reportMetadata.reportId] = {
+        reportId: reportMetadata.reportId,
+        conversationId,
+        timestamp: now,
+        trustScore: score,
+        reportData
+      }
     }
     
     if (isNewPerson || !updatedStorage.people[personKey]) {
@@ -267,6 +324,9 @@ function App() {
     } else {
       updatedStorage.conversations[conversationId].updatedAt = now
       updatedStorage.conversations[conversationId].lastScore = score
+      if (!Array.isArray(updatedStorage.conversations[conversationId].reports)) {
+        updatedStorage.conversations[conversationId].reports = []
+      }
       updatedStorage.conversations[conversationId].reports.push(reportMetadata)
     }
     
@@ -286,26 +346,44 @@ function App() {
     }
   }
 
-  const loadSpecificReport = async (conversationId: string) => {
+  const loadSpecificReport = async (reportId: string, conversationId: string) => {
     setLoadingReport(true)
     try {
-      const response = await fetch(`${API_URL}/trustscore/${conversationId}`)
-      if (!response.ok) {
-        throw new Error('Failed to load report')
-      }
-      const data = await response.json()
-      setReport(data)
-      setShowReportHistory(false)
-      setActiveTab('results')
+      const snapshot = peopleStorage.reportsById[reportId]
       
-      try {
-        const timelineResponse = await fetch(`${API_URL}/timeline/${conversationId}`)
-        if (timelineResponse.ok) {
-          const timelineData = await timelineResponse.json()
-          setTimeline(timelineData)
+      if (snapshot && snapshot.reportData) {
+        setReport(snapshot.reportData)
+        setShowReportHistory(false)
+        setActiveTab('results')
+        
+        try {
+          const timelineResponse = await fetch(`${API_URL}/timeline/${conversationId}`)
+          if (timelineResponse.ok) {
+            const timelineData = await timelineResponse.json()
+            setTimeline(timelineData)
+          }
+        } catch (err) {
+          console.error('Failed to fetch timeline:', err)
         }
-      } catch (err) {
-        console.error('Failed to fetch timeline:', err)
+      } else {
+        const response = await fetch(`${API_URL}/trustscore/${conversationId}`)
+        if (!response.ok) {
+          throw new Error('Failed to load report')
+        }
+        const data = await response.json()
+        setReport(data)
+        setShowReportHistory(false)
+        setActiveTab('results')
+        
+        try {
+          const timelineResponse = await fetch(`${API_URL}/timeline/${conversationId}`)
+          if (timelineResponse.ok) {
+            const timelineData = await timelineResponse.json()
+            setTimeline(timelineData)
+          }
+        } catch (err) {
+          console.error('Failed to fetch timeline:', err)
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load report')
@@ -533,7 +611,7 @@ Please send me $500 right now via crypto!`
       setReport(data)
       
       if (data.conversation_id) {
-        addOrUpdatePerson(data.conversation_id, data.trust_score)
+        addOrUpdatePerson(data.conversation_id, data.trust_score, data)
       }
       
       if (data.conversation_id) {
@@ -902,8 +980,8 @@ Please send me $500 right now via crypto!`
                                 : 'bg-[#F5E8DC] border-[#E6B7BE] hover:border-[#3C4B7C]'
                             } ${person.archived ? 'opacity-60' : ''}`}
                             onClick={() => {
-                              loadPerson(person.personKey)
-                              setIsNewPerson(false)
+                              setSelectedPersonForHistory(person.personKey)
+                              setShowReportHistory(true)
                             }}
                           >
                             <div className="flex items-center justify-between">
@@ -1006,7 +1084,7 @@ Please send me $500 right now via crypto!`
                         <div
                           key={reportMeta.reportId}
                           className="p-4 border-2 border-[#E6B7BE] rounded-lg hover:border-[#3C4B7C] transition-all cursor-pointer bg-[#F5E8DC]"
-                          onClick={() => loadSpecificReport(reportMeta.conversationId)}
+                          onClick={() => loadSpecificReport(reportMeta.reportId, reportMeta.conversationId)}
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex-1">
