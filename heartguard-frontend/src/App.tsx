@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import './App.css'
-import { Shield, Upload, MessageSquare, AlertTriangle, CheckCircle, XCircle, Heart, TrendingUp, Globe, Download, ExternalLink, Users, Search, Archive, ChevronLeft, ChevronRight, Plus, RotateCcw, UserPlus, Bell, Trash2, Mail, Phone } from 'lucide-react'
+import { Shield, Upload, MessageSquare, AlertTriangle, CheckCircle, XCircle, Heart, TrendingUp, Globe, Download, ExternalLink, Users, Search, Archive, ChevronLeft, ChevronRight, Plus, RotateCcw, UserPlus, Bell, Trash2, Mail, Phone, History, X } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -104,6 +104,15 @@ interface PersonData {
   lastConversationId?: string
   conversationIds: string[]
   lastScore?: number
+  reportCount: number
+}
+
+interface ReportMetadata {
+  reportId: string
+  conversationId: string
+  trustScore: number
+  timestamp: string
+  title: string
 }
 
 interface ConversationMetadata {
@@ -112,6 +121,7 @@ interface ConversationMetadata {
   createdAt: string
   updatedAt: string
   lastScore?: number
+  reports: ReportMetadata[]
 }
 
 interface PeopleStorage {
@@ -166,6 +176,17 @@ function App() {
   const [newContactEmail, setNewContactEmail] = useState('')
   const [newContactPhone, setNewContactPhone] = useState('')
   const [newContactThreshold, setNewContactThreshold] = useState(40)
+  
+  const [showReportHistory, setShowReportHistory] = useState(false)
+  const [selectedPersonForHistory, setSelectedPersonForHistory] = useState<string | null>(null)
+  const [loadingReport, setLoadingReport] = useState(false)
+  
+  const [socialInstagram, setSocialInstagram] = useState('')
+  const [socialFacebook, setSocialFacebook] = useState('')
+  const [socialWhatsApp, setSocialWhatsApp] = useState('')
+  const [socialLinkedIn, setSocialLinkedIn] = useState('')
+  const [socialTwitter, setSocialTwitter] = useState('')
+  const [socialOther, setSocialOther] = useState('')
 
   useEffect(() => {
     const stored = localStorage.getItem('heartguard_people')
@@ -202,6 +223,14 @@ function App() {
     
     const updatedStorage = { ...peopleStorage }
     
+    const reportMetadata: ReportMetadata = {
+      reportId: `${conversationId}-${Date.now()}`,
+      conversationId,
+      trustScore: score,
+      timestamp: now,
+      title: `Analysis ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}`
+    }
+    
     if (isNewPerson || !updatedStorage.people[personKey]) {
       updatedStorage.people[personKey] = {
         personKey,
@@ -212,24 +241,33 @@ function App() {
         updatedAt: now,
         lastConversationId: conversationId,
         conversationIds: [conversationId],
-        lastScore: score
+        lastScore: score,
+        reportCount: 1
       }
     } else {
       const person = updatedStorage.people[personKey]
       person.updatedAt = now
       person.lastConversationId = conversationId
       person.lastScore = score
+      person.reportCount = (person.reportCount || 0) + 1
       if (!person.conversationIds.includes(conversationId)) {
         person.conversationIds.push(conversationId)
       }
     }
     
-    updatedStorage.conversations[conversationId] = {
-      personKey,
-      title: `${personName} - ${new Date().toLocaleDateString()}`,
-      createdAt: now,
-      updatedAt: now,
-      lastScore: score
+    if (!updatedStorage.conversations[conversationId]) {
+      updatedStorage.conversations[conversationId] = {
+        personKey,
+        title: `${personName} - ${new Date().toLocaleDateString()}`,
+        createdAt: now,
+        updatedAt: now,
+        lastScore: score,
+        reports: [reportMetadata]
+      }
+    } else {
+      updatedStorage.conversations[conversationId].updatedAt = now
+      updatedStorage.conversations[conversationId].lastScore = score
+      updatedStorage.conversations[conversationId].reports.push(reportMetadata)
     }
     
     savePeopleStorage(updatedStorage)
@@ -246,6 +284,49 @@ function App() {
       setContinueSession(true)
       setScammerName(person.displayName)
     }
+  }
+
+  const loadSpecificReport = async (conversationId: string) => {
+    setLoadingReport(true)
+    try {
+      const response = await fetch(`${API_URL}/trustscore/${conversationId}`)
+      if (!response.ok) {
+        throw new Error('Failed to load report')
+      }
+      const data = await response.json()
+      setReport(data)
+      setShowReportHistory(false)
+      setActiveTab('results')
+      
+      try {
+        const timelineResponse = await fetch(`${API_URL}/timeline/${conversationId}`)
+        if (timelineResponse.ok) {
+          const timelineData = await timelineResponse.json()
+          setTimeline(timelineData)
+        }
+      } catch (err) {
+        console.error('Failed to fetch timeline:', err)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load report')
+    } finally {
+      setLoadingReport(false)
+    }
+  }
+
+  const getPersonReports = (personKey: string): ReportMetadata[] => {
+    const person = peopleStorage.people[personKey]
+    if (!person) return []
+    
+    const allReports: ReportMetadata[] = []
+    person.conversationIds.forEach(convId => {
+      const conversation = peopleStorage.conversations[convId]
+      if (conversation?.reports) {
+        allReports.push(...conversation.reports)
+      }
+    })
+    
+    return allReports.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
   }
 
   const toggleArchivePerson = (personKey: string) => {
@@ -416,11 +497,20 @@ Please send me $500 right now via crypto!`
       
       const personName = newPersonName.trim() || scammerName.trim() || `Unknown ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}`
       
-      if (personName || scammerPhone || scammerEmail || victimNarrative) {
+      if (personName || scammerPhone || scammerEmail || victimNarrative || socialInstagram || socialFacebook || socialWhatsApp || socialLinkedIn || socialTwitter || socialOther) {
+        const socialHandles = []
+        if (socialInstagram) socialHandles.push({ platform: 'Instagram', username: socialInstagram })
+        if (socialFacebook) socialHandles.push({ platform: 'Facebook', username: socialFacebook })
+        if (socialWhatsApp) socialHandles.push({ platform: 'WhatsApp', username: socialWhatsApp })
+        if (socialLinkedIn) socialHandles.push({ platform: 'LinkedIn', username: socialLinkedIn })
+        if (socialTwitter) socialHandles.push({ platform: 'Twitter', username: socialTwitter })
+        if (socialOther) socialHandles.push({ platform: 'Other', username: socialOther })
+        
         const scammerProfile = {
           claimed_name: personName,
           phone_numbers: scammerPhone ? [scammerPhone] : null,
           email_addresses: scammerEmail ? [scammerEmail] : null,
+          social_handles: socialHandles.length > 0 ? socialHandles : null,
           victim_narrative: victimNarrative || null
         }
         formData.append('scammer_profile_json', JSON.stringify(scammerProfile))
@@ -838,25 +928,113 @@ Please send me $500 right now via crypto!`
                                   <span>•</span>
                                   <span>{new Date(person.updatedAt).toLocaleDateString()}</span>
                                   <span>•</span>
-                                  <span>{person.conversationIds.length} session(s)</span>
+                                  <span>{person.reportCount || person.conversationIds.length} report(s)</span>
                                 </div>
                               </div>
-                              <Button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  toggleArchivePerson(person.personKey)
-                                }}
-                                variant="ghost"
-                                size="sm"
-                                className="text-[#5B3256]"
-                              >
-                                <Archive className="h-4 w-4" />
-                              </Button>
+                              <div className="flex gap-1">
+                                <Button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setSelectedPersonForHistory(person.personKey)
+                                    setShowReportHistory(true)
+                                  }}
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-[#3C4B7C]"
+                                  title="View Report History"
+                                >
+                                  <History className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    toggleArchivePerson(person.personKey)
+                                  }}
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-[#5B3256]"
+                                >
+                                  <Archive className="h-4 w-4" />
+                                </Button>
+                              </div>
                             </div>
                           </div>
                         ))
                       )}
                     </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Report History Modal */}
+        {showReportHistory && selectedPersonForHistory && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <Card className="bg-white max-w-2xl w-full max-h-[80vh] overflow-hidden">
+              <CardHeader className="border-b border-[#E6B7BE]">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-[#5B3256]" style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 700 }}>
+                    <History className="inline mr-2 h-5 w-5" />
+                    Report History - {peopleStorage.people[selectedPersonForHistory]?.displayName}
+                  </CardTitle>
+                  <Button
+                    onClick={() => {
+                      setShowReportHistory(false)
+                      setSelectedPersonForHistory(null)
+                    }}
+                    variant="ghost"
+                    size="sm"
+                    className="text-[#5B3256]"
+                  >
+                    <X className="h-5 w-5" />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="overflow-y-auto max-h-[60vh] p-6">
+                {loadingReport ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#5B3256]"></div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {getPersonReports(selectedPersonForHistory).length === 0 ? (
+                      <p className="text-center text-[#5B3256]/60 py-8">No reports found for this person</p>
+                    ) : (
+                      getPersonReports(selectedPersonForHistory).map((reportMeta, idx) => (
+                        <div
+                          key={reportMeta.reportId}
+                          className="p-4 border-2 border-[#E6B7BE] rounded-lg hover:border-[#3C4B7C] transition-all cursor-pointer bg-[#F5E8DC]"
+                          onClick={() => loadSpecificReport(reportMeta.conversationId)}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3">
+                                <span className={`text-2xl font-bold ${getTrustScoreColor(reportMeta.trustScore)}`}>
+                                  {reportMeta.trustScore}
+                                </span>
+                                <div>
+                                  <p className="font-semibold text-[#5B3256]">
+                                    {reportMeta.title}
+                                  </p>
+                                  <p className="text-xs text-[#5B3256]/60">
+                                    {new Date(reportMeta.timestamp).toLocaleString()}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="border-[#3C4B7C] text-[#3C4B7C]"
+                            >
+                              View Report
+                            </Button>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 )}
               </CardContent>
@@ -992,6 +1170,55 @@ Please send me $500 right now via crypto!`
                     placeholder="e.g., scammer@example.com"
                     className="w-full px-4 py-2 bg-[#F5E8DC] border-[#E6B7BE] border-2 rounded-xl text-[#5B3256] placeholder:text-[#5B3256]/50"
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-[#5B3256] mb-2">
+                    Social Media Handles (Optional)
+                  </label>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <input
+                      type="text"
+                      value={socialInstagram}
+                      onChange={(e) => setSocialInstagram(e.target.value)}
+                      placeholder="Instagram username"
+                      className="w-full px-4 py-2 bg-[#F5E8DC] border-[#E6B7BE] border-2 rounded-xl text-[#5B3256] placeholder:text-[#5B3256]/50"
+                    />
+                    <input
+                      type="text"
+                      value={socialFacebook}
+                      onChange={(e) => setSocialFacebook(e.target.value)}
+                      placeholder="Facebook username"
+                      className="w-full px-4 py-2 bg-[#F5E8DC] border-[#E6B7BE] border-2 rounded-xl text-[#5B3256] placeholder:text-[#5B3256]/50"
+                    />
+                    <input
+                      type="text"
+                      value={socialWhatsApp}
+                      onChange={(e) => setSocialWhatsApp(e.target.value)}
+                      placeholder="WhatsApp number"
+                      className="w-full px-4 py-2 bg-[#F5E8DC] border-[#E6B7BE] border-2 rounded-xl text-[#5B3256] placeholder:text-[#5B3256]/50"
+                    />
+                    <input
+                      type="text"
+                      value={socialLinkedIn}
+                      onChange={(e) => setSocialLinkedIn(e.target.value)}
+                      placeholder="LinkedIn username"
+                      className="w-full px-4 py-2 bg-[#F5E8DC] border-[#E6B7BE] border-2 rounded-xl text-[#5B3256] placeholder:text-[#5B3256]/50"
+                    />
+                    <input
+                      type="text"
+                      value={socialTwitter}
+                      onChange={(e) => setSocialTwitter(e.target.value)}
+                      placeholder="Twitter/X username"
+                      className="w-full px-4 py-2 bg-[#F5E8DC] border-[#E6B7BE] border-2 rounded-xl text-[#5B3256] placeholder:text-[#5B3256]/50"
+                    />
+                    <input
+                      type="text"
+                      value={socialOther}
+                      onChange={(e) => setSocialOther(e.target.value)}
+                      placeholder="Other social media"
+                      className="w-full px-4 py-2 bg-[#F5E8DC] border-[#E6B7BE] border-2 rounded-xl text-[#5B3256] placeholder:text-[#5B3256]/50"
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-[#5B3256] mb-2">
