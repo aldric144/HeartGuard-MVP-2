@@ -1733,6 +1733,9 @@ async def get_ip_intelligence(ip: str):
             else:
                 risk_level = "Low"
             
+            asn_value = data.get("connection", {}).get("asn")
+            asn_str = str(asn_value) if asn_value is not None else None
+            
             return IPIntelligenceResponse(
                 ip=ip,
                 success=True,
@@ -1744,7 +1747,7 @@ async def get_ip_intelligence(ip: str):
                 longitude=data.get("longitude"),
                 isp=data.get("connection", {}).get("isp"),
                 organization=data.get("connection", {}).get("org"),
-                asn=data.get("connection", {}).get("asn"),
+                asn=asn_str,
                 is_vpn=is_vpn,
                 is_proxy=is_proxy,
                 is_tor=is_tor,
