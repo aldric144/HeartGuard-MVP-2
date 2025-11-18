@@ -77,7 +77,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
-        "https://heart-guard-mvp-2.vercel.app"
+        "https://heart-guard-mvp-2.vercel.app",
+        "https://demo.heartguard.me",
+        "https://heart-guard-mvp-2-git-dev-30d77e-klove144-bellsouthnes-projects.vercel.app"
     ],
     allow_credentials=True,
     allow_methods=["*"],
