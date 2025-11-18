@@ -714,7 +714,14 @@ Please send me $500 right now via crypto!`
       if (!response.ok) {
         const errorText = await response.text()
         console.error('PDF generation failed:', response.status, errorText)
-        throw new Error(`Failed to generate PDF (${response.status}): ${errorText}`)
+        
+        if (response.status === 404) {
+          throw new Error('Report not found in database. PDF generation requires the conversation to be saved on the server.')
+        } else if (response.status === 500) {
+          throw new Error('PDF generation failed on the server. This feature is being improved. Please try again later.')
+        } else {
+          throw new Error(`Failed to generate PDF (${response.status}): ${errorText}`)
+        }
       }
 
       const contentType = response.headers.get('content-type')
@@ -848,6 +855,7 @@ Please send me $500 right now via crypto!`
                       setCurrentPersonKey(null)
                       setNewPersonName('')
                       setNewPersonHint('')
+                      setScammerName('')
                       setContinueSession(false)
                     }}
                     className={`flex-1 px-4 py-2 rounded-lg font-semibold transition-all ${
@@ -939,7 +947,10 @@ Please send me $500 right now via crypto!`
                     {currentPersonKey && (
                       <div className="flex gap-2 p-1 bg-[#F5E8DC] rounded-xl">
                         <button
-                          onClick={() => setContinueSession(false)}
+                          onClick={() => {
+                            setContinueSession(false)
+                            setScammerName('')
+                          }}
                           className={`flex-1 px-4 py-2 rounded-lg font-semibold transition-all ${
                             !continueSession 
                               ? 'bg-[#E6B7BE] text-[#5B3256] shadow-md' 
