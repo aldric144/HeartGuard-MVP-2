@@ -2063,10 +2063,6 @@ Please send me $500 right now via crypto!`
         )}
 
         <div className="mt-12 text-center text-[#F5E8DC] text-sm">
-          <p className="mb-2">
-            <strong className="text-white">Note:</strong> This is a proof-of-concept demo using
-            in-memory storage. Data will be lost when the server restarts.
-          </p>
           <p className="opacity-90">HeartGuard™ - Empowering safer connections through compassionate AI</p>
         </div>
         
