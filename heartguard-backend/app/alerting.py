@@ -42,6 +42,12 @@ def check_and_trigger_alerts(
     ).order_by(TrustedContact.escalation_order).all()
     
     if not contacts:
+        contacts = db.query(TrustedContact).filter(
+            TrustedContact.user_identifier == 'global',
+            TrustedContact.is_active == True
+        ).order_by(TrustedContact.escalation_order).all()
+    
+    if not contacts:
         return []
     
     triggered_alerts = []
