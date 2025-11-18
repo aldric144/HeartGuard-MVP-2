@@ -1,7 +1,9 @@
 import { Shield, Globe, Lock, Accessibility, ArrowRight } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useNavigate } from 'react-router-dom'
 
 export function More() {
+  const navigate = useNavigate()
   const features = [
     {
       id: 'community',
@@ -10,7 +12,8 @@ export function More() {
       icon: Globe,
       color: 'text-blue-600',
       bgColor: 'bg-blue-50',
-      status: 'Available'
+      status: 'Available',
+      path: '/app/advanced/community-intelligence'
     },
     {
       id: 'crypto',
@@ -19,7 +22,8 @@ export function More() {
       icon: Shield,
       color: 'text-green-600',
       bgColor: 'bg-green-50',
-      status: 'Available'
+      status: 'Available',
+      path: '/app/advanced/walletwatch-plus'
     },
     {
       id: 'privacy',
@@ -28,7 +32,8 @@ export function More() {
       icon: Lock,
       color: 'text-purple-600',
       bgColor: 'bg-purple-50',
-      status: 'Available'
+      status: 'Available',
+      path: '/app/advanced/privacy-controls'
     },
     {
       id: 'accessibility',
@@ -37,7 +42,8 @@ export function More() {
       icon: Accessibility,
       color: 'text-orange-600',
       bgColor: 'bg-orange-50',
-      status: 'Available'
+      status: 'Available',
+      path: '/app/advanced/accessibility'
     }
   ]
 
@@ -57,7 +63,11 @@ export function More() {
           {features.map((feature) => {
             const Icon = feature.icon
             return (
-              <Card key={feature.id} className="hover:shadow-lg transition-shadow cursor-pointer">
+              <Card 
+                key={feature.id} 
+                className="hover:shadow-lg transition-shadow cursor-pointer"
+                onClick={() => navigate(feature.path)}
+              >
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div className={`p-3 rounded-lg ${feature.bgColor} mb-4`}>
@@ -74,7 +84,7 @@ export function More() {
                 </CardHeader>
                 <CardContent>
                   <button className="flex items-center gap-2 text-sm font-semibold text-[#3C4B7C] hover:text-[#5B3256] transition-colors">
-                    Learn More
+                    Open Feature
                     <ArrowRight className="w-4 h-4" />
                   </button>
                 </CardContent>
@@ -84,9 +94,9 @@ export function More() {
         </div>
 
         <div className="mt-8 p-6 bg-white rounded-lg border-2 border-[#E6B7BE]">
-          <h2 className="text-xl font-bold text-[#5B3256] mb-4">Coming Soon</h2>
+          <h2 className="text-xl font-bold text-[#5B3256] mb-4">Advanced Features Now Available</h2>
           <p className="text-[#5B3256]/70 mb-4">
-            These advanced features are currently in development. Full functionality will be available in the next update.
+            All advanced features are now fully functional. Click on any feature card above to get started.
           </p>
           <ul className="space-y-2 text-sm text-[#5B3256]/70">
             <li>• Report suspected scammers to the community network</li>
