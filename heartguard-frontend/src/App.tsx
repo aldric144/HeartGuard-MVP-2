@@ -865,6 +865,7 @@ Please send me $500 right now via crypto!`
                       setSocialTwitter('')
                       setSocialOther('')
                       setVictimNarrative('')
+                      setSuspectedIPs('')
                       setContinueSession(false)
                     }}
                     className={`flex-1 px-4 py-2 rounded-lg font-semibold transition-all ${
@@ -968,6 +969,7 @@ Please send me $500 right now via crypto!`
                             setSocialTwitter('')
                             setSocialOther('')
                             setVictimNarrative('')
+                            setSuspectedIPs('')
                           }}
                           className={`flex-1 px-4 py-2 rounded-lg font-semibold transition-all ${
                             !continueSession 
