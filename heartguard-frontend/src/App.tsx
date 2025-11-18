@@ -117,6 +117,7 @@ interface PersonData {
   conversationIds: string[]
   lastScore?: number
   reportCount: number
+  photoUrl?: string
 }
 
 interface ReportMetadata {
@@ -179,6 +180,8 @@ function App() {
   const [newPersonHint, setNewPersonHint] = useState('')
   const [isNewPerson, setIsNewPerson] = useState(true)
   const [continueSession, setContinueSession] = useState(false)
+  const [pendingPhotoThumbnail, setPendingPhotoThumbnail] = useState<string | null>(null)
+  const [selectedPhotoForView, setSelectedPhotoForView] = useState<string | null>(null)
   const [showConversationList, setShowConversationList] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [showArchived, setShowArchived] = useState(false)
@@ -312,7 +315,8 @@ function App() {
         lastConversationId: conversationId,
         conversationIds: [conversationId],
         lastScore: score,
-        reportCount: 1
+        reportCount: 1,
+        photoUrl: pendingPhotoThumbnail || undefined
       }
     } else {
       const person = updatedStorage.people[personKey]
@@ -322,6 +326,9 @@ function App() {
       person.reportCount = (person.reportCount || 0) + 1
       if (!person.conversationIds.includes(conversationId)) {
         person.conversationIds.push(conversationId)
+      }
+      if (pendingPhotoThumbnail) {
+        person.photoUrl = pendingPhotoThumbnail
       }
     }
     
@@ -561,9 +568,55 @@ Please send me $500 right now via crypto!`
     return highlightedText
   }
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const generateThumbnail = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const img = new Image()
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          const maxSize = 200
+          let width = img.width
+          let height = img.height
+          
+          if (width > height) {
+            if (width > maxSize) {
+              height = (height * maxSize) / width
+              width = maxSize
+            }
+          } else {
+            if (height > maxSize) {
+              width = (width * maxSize) / height
+              height = maxSize
+            }
+          }
+          
+          canvas.width = width
+          canvas.height = height
+          const ctx = canvas.getContext('2d')
+          ctx?.drawImage(img, 0, 0, width, height)
+          
+          resolve(canvas.toDataURL('image/jpeg', 0.7))
+        }
+        img.onerror = reject
+        img.src = e.target?.result as string
+      }
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
+  }
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setSelectedFile(e.target.files[0])
+      const file = e.target.files[0]
+      setSelectedFile(file)
+      
+      try {
+        const thumbnail = await generateThumbnail(file)
+        setPendingPhotoThumbnail(thumbnail)
+      } catch (err) {
+        console.error('Failed to generate thumbnail:', err)
+      }
     }
   }
 
@@ -1050,28 +1103,45 @@ Please send me $500 right now via crypto!`
                             }}
                           >
                             <div className="flex items-center justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-semibold text-[#5B3256]">
-                                    {person.displayName}
-                                  </span>
-                                  {person.hint && (
-                                    <span className="text-xs text-[#5B3256]/60">
-                                      ({person.hint})
+                              <div className="flex items-center flex-1">
+                                {person.photoUrl ? (
+                                  <img
+                                    src={person.photoUrl}
+                                    alt={person.displayName}
+                                    className="w-10 h-10 rounded-full object-cover shadow-sm cursor-pointer"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      setSelectedPhotoForView(person.photoUrl!)
+                                    }}
+                                  />
+                                ) : (
+                                  <div className="w-10 h-10 rounded-full bg-[#3C4B7C] flex items-center justify-center text-white font-semibold text-sm shadow-sm">
+                                    {person.displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                                  </div>
+                                )}
+                                <div className="flex-1 ml-3">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-[#5B3256]">
+                                      {person.displayName}
                                     </span>
-                                  )}
-                                  {person.archived && (
-                                    <Badge variant="outline" className="text-xs">
-                                      Archived
-                                    </Badge>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-3 mt-1 text-xs text-[#5B3256]/70">
-                                  <span>Score: {person.lastScore || 'N/A'}</span>
-                                  <span>•</span>
-                                  <span>{new Date(person.updatedAt).toLocaleDateString()}</span>
-                                  <span>•</span>
-                                  <span>{person.reportCount || person.conversationIds.length} report(s)</span>
+                                    {person.hint && (
+                                      <span className="text-xs text-[#5B3256]/60">
+                                        ({person.hint})
+                                      </span>
+                                    )}
+                                    {person.archived && (
+                                      <Badge variant="outline" className="text-xs">
+                                        Archived
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-3 mt-1 text-xs text-[#5B3256]/70">
+                                    <span>Score: {person.lastScore || 'N/A'}</span>
+                                    <span>•</span>
+                                    <span>{new Date(person.updatedAt).toLocaleDateString()}</span>
+                                    <span>•</span>
+                                    <span>{person.reportCount || person.conversationIds.length} report(s)</span>
+                                  </div>
                                 </div>
                               </div>
                               <div className="flex gap-1">
@@ -2035,6 +2105,31 @@ Please send me $500 right now via crypto!`
           conversationId={report.conversation_id}
           onClose={() => setShowGuardianMode(false)}
         />
+      )}
+      
+      {/* Photo Viewer Modal */}
+      {selectedPhotoForView && (
+        <div 
+          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+          onClick={() => setSelectedPhotoForView(null)}
+        >
+          <div className="relative max-w-4xl max-h-[90vh]">
+            <Button
+              onClick={() => setSelectedPhotoForView(null)}
+              variant="ghost"
+              size="sm"
+              className="absolute -top-12 right-0 text-white hover:bg-white/20"
+            >
+              <X className="h-6 w-6" />
+            </Button>
+            <img
+              src={selectedPhotoForView}
+              alt="Profile photo"
+              className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
       )}
     </div>
   )
