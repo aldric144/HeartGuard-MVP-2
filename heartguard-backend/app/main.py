@@ -1059,61 +1059,31 @@ async def generate_trust_score(
     db.commit()
     db.refresh(db_report)
     
-    if conversation:
-        from app.models.database import TrustedContact, AlertLog
-        from datetime import timedelta
-        
-        contacts = db.query(TrustedContact).filter(
-            TrustedContact.user_identifier == conversation.id,
-            TrustedContact.is_active == True
-        ).all()
-        
-        if contacts:
-            financial_patterns = []
-            if chat_analysis and chat_analysis.manipulation_patterns:
-                financial_patterns = [
-                    p for p in chat_analysis.manipulation_patterns 
-                    if p.pattern_type in ["Financial Request", "Cryptocurrency Request", "Gift Card Request"]
-                ]
+    triggered_alerts = []
+    if conversation and chat_analysis:
+        try:
+            has_financial_request = any(
+                p.pattern_type in ["Financial Request", "Cryptocurrency Request", "Gift Card Request"]
+                for p in chat_analysis.manipulation_patterns
+            )
             
-            for contact in contacts:
-                threshold = contact.alert_threshold or 40
-                should_alert = False
-                alert_reason = ""
-                
-                if financial_patterns:
-                    should_alert = True
-                    alert_reason = f"Financial manipulation detected: {', '.join([p.pattern_type for p in financial_patterns])}"
-                elif trust_score < threshold:
-                    should_alert = True
-                    alert_reason = f"Trust score {trust_score} below threshold {threshold}"
-                
-                if should_alert:
-                    cooldown_minutes = 60
-                    if contact.last_alert_timestamp:
-                        time_since_last = datetime.utcnow() - contact.last_alert_timestamp
-                        if time_since_last < timedelta(minutes=cooldown_minutes):
-                            print(f"⏱️ Cooldown active for {contact.contact_name} ({int((timedelta(minutes=cooldown_minutes) - time_since_last).total_seconds() / 60)} min remaining)")
-                            continue
-                    
-                    alert_log = AlertLog(
-                        contact_id=contact.id,
-                        user_identifier=conversation.id,
-                        conversation_id=conversation.id,
-                        trust_score=trust_score,
-                        threshold=threshold,
-                        channel='EMAIL' if contact.contact_email else 'SMS' if contact.contact_phone else 'N/A',
-                        reason=alert_reason,
-                        status='LOGGED'
-                    )
-                    db.add(alert_log)
-                    
-                    contact.last_alert_timestamp = datetime.utcnow()
-                    
-                    print(f"⚠️ Guardian Mode Alert: {alert_reason} for conversation {conversation.id}")
-                    print(f"📧 Logged alert for {contact.contact_name} ({contact.contact_email or contact.contact_phone})")
+            triggered_alerts = check_and_trigger_alerts(
+                db=db,
+                user_identifier=conversation.id,
+                trust_score=trust_score,
+                emi=chat_analysis.emotional_manipulation_index,
+                has_financial_request=has_financial_request,
+                conversation_id=conversation.id
+            )
             
-            db.commit()
+            if triggered_alerts:
+                print(f"✅ Guardian Mode: Triggered {len(triggered_alerts)} alert(s) for conversation {conversation.id}")
+                for alert in triggered_alerts:
+                    print(f"   → {alert['contact_name']} ({alert['contact_email']}): {alert['status']}")
+            else:
+                print(f"ℹ️ Guardian Mode: No alerts triggered for conversation {conversation.id} (trust_score={trust_score})")
+        except Exception as e:
+            print(f"❌ Guardian Mode alert error: {str(e)}")
     
     safety_nudges = []
     if chat_analysis:
