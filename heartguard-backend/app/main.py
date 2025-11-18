@@ -75,10 +75,16 @@ def normalize_phone_number(phone_input: str) -> str:
 # Disable CORS. Do not remove this for full-stack development.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",
+        "https://heart-guard-mvp-2.vercel.app",
+        "https://demo.heartguard.me",
+        "https://heart-guard-mvp-2-git-dev-30d77e-klove144-bellsouthnes-projects.vercel.app"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition"],
 )
 
 @app.on_event("startup")
@@ -894,7 +900,7 @@ async def generate_trust_score(
             consistency_issues=consistency_issues
         )
     
-    trust_score, confidence, color_band, insights = calculate_trust_score(photo_analysis, chat_analysis, metadata_analysis)
+    trust_score, confidence, color_band, insights, weighted_breakdown = calculate_trust_score(photo_analysis, chat_analysis, metadata_analysis)
     
     report_id = str(uuid.uuid4())
     
@@ -1053,61 +1059,31 @@ async def generate_trust_score(
     db.commit()
     db.refresh(db_report)
     
-    if conversation:
-        from app.models.database import TrustedContact, AlertLog
-        from datetime import timedelta
-        
-        contacts = db.query(TrustedContact).filter(
-            TrustedContact.user_identifier == conversation.id,
-            TrustedContact.is_active == True
-        ).all()
-        
-        if contacts:
-            financial_patterns = []
-            if chat_analysis and chat_analysis.manipulation_patterns:
-                financial_patterns = [
-                    p for p in chat_analysis.manipulation_patterns 
-                    if p.pattern_type in ["Financial Request", "Cryptocurrency Request", "Gift Card Request"]
-                ]
+    triggered_alerts = []
+    if conversation and chat_analysis:
+        try:
+            has_financial_request = any(
+                p.pattern_type in ["Financial Request", "Cryptocurrency Request", "Gift Card Request"]
+                for p in chat_analysis.manipulation_patterns
+            )
             
-            for contact in contacts:
-                threshold = contact.alert_threshold or 40
-                should_alert = False
-                alert_reason = ""
-                
-                if financial_patterns:
-                    should_alert = True
-                    alert_reason = f"Financial manipulation detected: {', '.join([p.pattern_type for p in financial_patterns])}"
-                elif trust_score < threshold:
-                    should_alert = True
-                    alert_reason = f"Trust score {trust_score} below threshold {threshold}"
-                
-                if should_alert:
-                    cooldown_minutes = 60
-                    if contact.last_alert_timestamp:
-                        time_since_last = datetime.utcnow() - contact.last_alert_timestamp
-                        if time_since_last < timedelta(minutes=cooldown_minutes):
-                            print(f"⏱️ Cooldown active for {contact.contact_name} ({int((timedelta(minutes=cooldown_minutes) - time_since_last).total_seconds() / 60)} min remaining)")
-                            continue
-                    
-                    alert_log = AlertLog(
-                        contact_id=contact.id,
-                        user_identifier=conversation.id,
-                        conversation_id=conversation.id,
-                        trust_score=trust_score,
-                        threshold=threshold,
-                        channel='EMAIL' if contact.contact_email else 'SMS' if contact.contact_phone else 'N/A',
-                        reason=alert_reason,
-                        status='LOGGED'
-                    )
-                    db.add(alert_log)
-                    
-                    contact.last_alert_timestamp = datetime.utcnow()
-                    
-                    print(f"⚠️ Guardian Mode Alert: {alert_reason} for conversation {conversation.id}")
-                    print(f"📧 Logged alert for {contact.contact_name} ({contact.contact_email or contact.contact_phone})")
+            triggered_alerts = check_and_trigger_alerts(
+                db=db,
+                user_identifier=conversation.id,
+                trust_score=trust_score,
+                emi=chat_analysis.emotional_manipulation_index,
+                has_financial_request=has_financial_request,
+                conversation_id=conversation.id
+            )
             
-            db.commit()
+            if triggered_alerts:
+                print(f"✅ Guardian Mode: Triggered {len(triggered_alerts)} alert(s) for conversation {conversation.id}")
+                for alert in triggered_alerts:
+                    print(f"   → {alert['contact_name']} ({alert['contact_email']}): {alert['status']}")
+            else:
+                print(f"ℹ️ Guardian Mode: No alerts triggered for conversation {conversation.id} (trust_score={trust_score})")
+        except Exception as e:
+            print(f"❌ Guardian Mode alert error: {str(e)}")
     
     safety_nudges = []
     if chat_analysis:
@@ -1383,63 +1359,79 @@ async def generate_evidence_report(
     Returns:
         StreamingResponse with PDF file
     """
-    from app.models.database import Conversation as DBConversation, AnalysisPoint as DBAnalysisPoint, EvidenceReport as DBEvidenceReport
-    
-    conversation = db.query(DBConversation).filter(DBConversation.id == conversation_id).first()
-    
-    if not conversation:
-        raise HTTPException(status_code=404, detail=f"Conversation {conversation_id} not found")
-    
-    analysis_points = db.query(DBAnalysisPoint).filter(
-        DBAnalysisPoint.conversation_id == conversation_id
-    ).order_by(DBAnalysisPoint.message_index.asc()).all()
-    
-    geographic_risk = None
-    phone_code_to_use = phone_code or conversation.phone_code
-    
-    if phone_code_to_use:
-        normalized_code = normalize_phone_number(phone_code_to_use)
-        geographic_risk = db.query(GeographicRisk).filter(
-            GeographicRisk.code == normalized_code
-        ).first()
-    
-    scammer_profile = None
-    if hasattr(conversation, 'scammer_profile') and conversation.scammer_profile:
-        scammer_profile = conversation.scammer_profile
-    
-    app_version = os.getenv("APP_VERSION", "1.0.0")
-    backend_version = os.getenv("BACKEND_VERSION", "1.0.0")
-    
-    pdf_buffer, dataset_hash, report_data = generate_evidence_pdf(
-        conversation, 
-        analysis_points, 
-        geographic_risk,
-        scammer_profile,
-        app_version,
-        backend_version
-    )
-    
-    evidence_report = DBEvidenceReport(
-        conversation_id=conversation_id,
-        dataset_hash=dataset_hash,
-        report_data=report_data,
-        app_version=app_version,
-        backend_version=backend_version
-    )
-    db.add(evidence_report)
-    db.commit()
-    
-    timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-    filename = f"HeartGuard_Evidence_{conversation_id[:8]}_{timestamp}.pdf"
-    
-    return StreamingResponse(
-        pdf_buffer,
-        media_type="application/pdf",
-        headers={
-            "Content-Disposition": f"attachment; filename={filename}",
-            "X-Report-Hash": dataset_hash
-        }
-    )
+    try:
+        from app.models.database import Conversation as DBConversation, AnalysisPoint as DBAnalysisPoint, EvidenceReport as DBEvidenceReport
+        
+        conversation = db.query(DBConversation).filter(DBConversation.id == conversation_id).first()
+        
+        if not conversation:
+            raise HTTPException(status_code=404, detail=f"Conversation {conversation_id} not found")
+        
+        analysis_points = db.query(DBAnalysisPoint).filter(
+            DBAnalysisPoint.conversation_id == conversation_id
+        ).order_by(DBAnalysisPoint.message_index.asc()).all()
+        
+        geographic_risk = None
+        phone_code_to_use = phone_code or conversation.phone_code
+        
+        if phone_code_to_use:
+            normalized_code = normalize_phone_number(phone_code_to_use)
+            geographic_risk = db.query(GeographicRisk).filter(
+                GeographicRisk.code == normalized_code
+            ).first()
+        
+        scammer_profile = None
+        if hasattr(conversation, 'scammer_profile') and conversation.scammer_profile:
+            # scammer_profile is a list due to backref, get the first item
+            if isinstance(conversation.scammer_profile, list) and len(conversation.scammer_profile) > 0:
+                scammer_profile = conversation.scammer_profile[0]
+            elif not isinstance(conversation.scammer_profile, list):
+                scammer_profile = conversation.scammer_profile
+        
+        app_version = os.getenv("APP_VERSION", "1.0.0")
+        backend_version = os.getenv("BACKEND_VERSION", "1.0.0")
+        
+        pdf_buffer, dataset_hash, report_data = generate_evidence_pdf(
+            conversation, 
+            analysis_points, 
+            geographic_risk,
+            scammer_profile,
+            app_version,
+            backend_version
+        )
+        
+        evidence_report = DBEvidenceReport(
+            conversation_id=conversation_id,
+            dataset_hash=dataset_hash,
+            report_data=report_data,
+            app_version=app_version,
+            backend_version=backend_version
+        )
+        db.add(evidence_report)
+        db.commit()
+        
+        timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+        filename = f"HeartGuard_Evidence_{conversation_id[:8]}_{timestamp}.pdf"
+        
+        return StreamingResponse(
+            pdf_buffer,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}",
+                "X-Report-Hash": dataset_hash
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"PDF generation error: {str(e)}")
+        print(error_details)
+        raise HTTPException(
+            status_code=500, 
+            detail=f"PDF generation failed: {str(e)}"
+        )
 
 
 @app.get("/evidence/verify")
@@ -1733,6 +1725,9 @@ async def get_ip_intelligence(ip: str):
             else:
                 risk_level = "Low"
             
+            asn_value = data.get("connection", {}).get("asn")
+            asn_str = str(asn_value) if asn_value is not None else None
+            
             return IPIntelligenceResponse(
                 ip=ip,
                 success=True,
@@ -1744,7 +1739,7 @@ async def get_ip_intelligence(ip: str):
                 longitude=data.get("longitude"),
                 isp=data.get("connection", {}).get("isp"),
                 organization=data.get("connection", {}).get("org"),
-                asn=data.get("connection", {}).get("asn"),
+                asn=asn_str,
                 is_vpn=is_vpn,
                 is_proxy=is_proxy,
                 is_tor=is_tor,

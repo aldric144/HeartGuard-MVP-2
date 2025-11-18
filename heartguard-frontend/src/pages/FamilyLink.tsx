@@ -13,7 +13,7 @@ export function FamilyLink() {
           </p>
         </div>
         
-        <GuardianMode />
+        <GuardianMode conversationId="global" />
       </div>
     </div>
   )

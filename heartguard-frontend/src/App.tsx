@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import './App.css'
-import { Shield, Upload, MessageSquare, AlertTriangle, CheckCircle, XCircle, Heart, TrendingUp, Globe, Download, ExternalLink, Users, Search, Archive, ChevronLeft, ChevronRight, Plus, RotateCcw, UserPlus, Bell, Trash2, Mail, Phone } from 'lucide-react'
+import { Shield, Upload, MessageSquare, AlertTriangle, CheckCircle, XCircle, Heart, TrendingUp, Globe, Download, ExternalLink, Users, Search, Archive, ChevronLeft, ChevronRight, Plus, RotateCcw, UserPlus, Bell, Trash2, Mail, Phone, History, X } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -14,8 +14,21 @@ import { GuardianMode } from '@/components/GuardianMode'
 import { BottomTabs } from '@/components/BottomTabs'
 import { FamilyLink } from '@/pages/FamilyLink'
 import { More } from '@/pages/More'
+import { Guardian } from '@/pages/Guardian'
+import { WarningBanner } from '@/components/WarningBanner'
+import { LegalAcceptanceModal, checkLegalAcceptance } from '@/components/LegalAcceptanceModal'
+import { LegalDisclaimer } from '@/components/LegalDisclaimer'
+import { Landing } from '@/pages/Landing'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
+function isLandingPage() {
+  return window.location.pathname === '/' || window.location.pathname === ''
+}
+
+function isAppPage() {
+  return window.location.pathname.startsWith('/app')
+}
 
 interface ManipulationPattern {
   pattern_type: string
@@ -103,6 +116,16 @@ interface PersonData {
   lastConversationId?: string
   conversationIds: string[]
   lastScore?: number
+  reportCount: number
+  photoUrl?: string
+}
+
+interface ReportMetadata {
+  reportId: string
+  conversationId: string
+  trustScore: number
+  timestamp: string
+  title: string
 }
 
 interface ConversationMetadata {
@@ -111,11 +134,21 @@ interface ConversationMetadata {
   createdAt: string
   updatedAt: string
   lastScore?: number
+  reports: ReportMetadata[]
+}
+
+interface ReportSnapshot {
+  reportId: string
+  conversationId: string
+  timestamp: string
+  trustScore: number
+  reportData: any
 }
 
 interface PeopleStorage {
   people: Record<string, PersonData>
   conversations: Record<string, ConversationMetadata>
+  reportsById: Record<string, ReportSnapshot>
 }
 
 function App() {
@@ -141,12 +174,14 @@ function App() {
   const [victimNarrative, setVictimNarrative] = useState('')
   const audioRef = useRef<HTMLAudioElement | null>(null)
   
-  const [peopleStorage, setPeopleStorage] = useState<PeopleStorage>({ people: {}, conversations: {} })
+  const [peopleStorage, setPeopleStorage] = useState<PeopleStorage>({ people: {}, conversations: {}, reportsById: {} })
   const [currentPersonKey, setCurrentPersonKey] = useState<string | null>(null)
   const [newPersonName, setNewPersonName] = useState('')
   const [newPersonHint, setNewPersonHint] = useState('')
   const [isNewPerson, setIsNewPerson] = useState(true)
   const [continueSession, setContinueSession] = useState(false)
+  const [pendingPhotoThumbnail, setPendingPhotoThumbnail] = useState<string | null>(null)
+  const [selectedPhotoForView, setSelectedPhotoForView] = useState<string | null>(null)
   const [showConversationList, setShowConversationList] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [showArchived, setShowArchived] = useState(false)
@@ -165,12 +200,62 @@ function App() {
   const [newContactEmail, setNewContactEmail] = useState('')
   const [newContactPhone, setNewContactPhone] = useState('')
   const [newContactThreshold, setNewContactThreshold] = useState(40)
+  
+  const [showReportHistory, setShowReportHistory] = useState(false)
+  const [selectedPersonForHistory, setSelectedPersonForHistory] = useState<string | null>(null)
+  const [loadingReport, setLoadingReport] = useState(false)
+  const [showLegalModal, setShowLegalModal] = useState(!checkLegalAcceptance())
+  
+  const [socialInstagram, setSocialInstagram] = useState('')
+  const [socialFacebook, setSocialFacebook] = useState('')
+  const [socialWhatsApp, setSocialWhatsApp] = useState('')
+  const [socialLinkedIn, setSocialLinkedIn] = useState('')
+  const [socialTwitter, setSocialTwitter] = useState('')
+  const [socialOther, setSocialOther] = useState('')
 
   useEffect(() => {
     const stored = localStorage.getItem('heartguard_people')
     if (stored) {
       try {
-        setPeopleStorage(JSON.parse(stored))
+        const parsed = JSON.parse(stored)
+        
+        let needsMigration = false
+        
+        if (!parsed.reportsById) {
+          parsed.reportsById = {}
+          needsMigration = true
+        }
+        
+        Object.keys(parsed.conversations || {}).forEach(convId => {
+          const conv = parsed.conversations[convId]
+          if (!Array.isArray(conv.reports)) {
+            needsMigration = true
+            conv.reports = []
+            if (conv.lastScore !== undefined) {
+              conv.reports.push({
+                reportId: `${convId}-legacy`,
+                conversationId: convId,
+                trustScore: conv.lastScore,
+                timestamp: conv.createdAt || new Date().toISOString(),
+                title: `Legacy Report - ${new Date(conv.createdAt || new Date()).toLocaleDateString()}`
+              })
+            }
+          }
+        })
+        
+        Object.keys(parsed.people || {}).forEach(personKey => {
+          const person = parsed.people[personKey]
+          if (person.reportCount === undefined) {
+            needsMigration = true
+            person.reportCount = person.conversationIds?.length || 0
+          }
+        })
+        
+        setPeopleStorage(parsed)
+        
+        if (needsMigration) {
+          localStorage.setItem('heartguard_people', JSON.stringify(parsed))
+        }
       } catch (e) {
         console.error('Failed to load people storage:', e)
       }
@@ -194,12 +279,30 @@ function App() {
     return `${slug}${hintSlug}`
   }
 
-  const addOrUpdatePerson = (conversationId: string, score: number) => {
+  const addOrUpdatePerson = (conversationId: string, score: number, reportData?: any) => {
     const now = new Date().toISOString()
     const personName = newPersonName.trim() || scammerName.trim() || `Unknown ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}`
     const personKey = isNewPerson ? createPersonKey(personName, newPersonHint) : currentPersonKey!
     
     const updatedStorage = { ...peopleStorage }
+    
+    const reportMetadata: ReportMetadata = {
+      reportId: `${conversationId}-${Date.now()}`,
+      conversationId,
+      trustScore: score,
+      timestamp: now,
+      title: `Analysis ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}`
+    }
+    
+    if (reportData) {
+      updatedStorage.reportsById[reportMetadata.reportId] = {
+        reportId: reportMetadata.reportId,
+        conversationId,
+        timestamp: now,
+        trustScore: score,
+        reportData
+      }
+    }
     
     if (isNewPerson || !updatedStorage.people[personKey]) {
       updatedStorage.people[personKey] = {
@@ -211,24 +314,40 @@ function App() {
         updatedAt: now,
         lastConversationId: conversationId,
         conversationIds: [conversationId],
-        lastScore: score
+        lastScore: score,
+        reportCount: 1,
+        photoUrl: pendingPhotoThumbnail || undefined
       }
     } else {
       const person = updatedStorage.people[personKey]
       person.updatedAt = now
       person.lastConversationId = conversationId
       person.lastScore = score
+      person.reportCount = (person.reportCount || 0) + 1
       if (!person.conversationIds.includes(conversationId)) {
         person.conversationIds.push(conversationId)
       }
+      if (pendingPhotoThumbnail) {
+        person.photoUrl = pendingPhotoThumbnail
+      }
     }
     
-    updatedStorage.conversations[conversationId] = {
-      personKey,
-      title: `${personName} - ${new Date().toLocaleDateString()}`,
-      createdAt: now,
-      updatedAt: now,
-      lastScore: score
+    if (!updatedStorage.conversations[conversationId]) {
+      updatedStorage.conversations[conversationId] = {
+        personKey,
+        title: `${personName} - ${new Date().toLocaleDateString()}`,
+        createdAt: now,
+        updatedAt: now,
+        lastScore: score,
+        reports: [reportMetadata]
+      }
+    } else {
+      updatedStorage.conversations[conversationId].updatedAt = now
+      updatedStorage.conversations[conversationId].lastScore = score
+      if (!Array.isArray(updatedStorage.conversations[conversationId].reports)) {
+        updatedStorage.conversations[conversationId].reports = []
+      }
+      updatedStorage.conversations[conversationId].reports.push(reportMetadata)
     }
     
     savePeopleStorage(updatedStorage)
@@ -245,6 +364,67 @@ function App() {
       setContinueSession(true)
       setScammerName(person.displayName)
     }
+  }
+
+  const loadSpecificReport = async (reportId: string, conversationId: string) => {
+    setLoadingReport(true)
+    try {
+      const snapshot = peopleStorage.reportsById[reportId]
+      
+      if (snapshot && snapshot.reportData) {
+        setReport(snapshot.reportData)
+        setShowReportHistory(false)
+        setActiveTab('results')
+        
+        try {
+          const timelineResponse = await fetch(`${API_URL}/timeline/${conversationId}`)
+          if (timelineResponse.ok) {
+            const timelineData = await timelineResponse.json()
+            setTimeline(timelineData)
+          }
+        } catch (err) {
+          console.error('Failed to fetch timeline:', err)
+        }
+      } else {
+        const response = await fetch(`${API_URL}/trustscore/${conversationId}`)
+        if (!response.ok) {
+          throw new Error('Failed to load report')
+        }
+        const data = await response.json()
+        setReport(data)
+        setShowReportHistory(false)
+        setActiveTab('results')
+        
+        try {
+          const timelineResponse = await fetch(`${API_URL}/timeline/${conversationId}`)
+          if (timelineResponse.ok) {
+            const timelineData = await timelineResponse.json()
+            setTimeline(timelineData)
+          }
+        } catch (err) {
+          console.error('Failed to fetch timeline:', err)
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load report')
+    } finally {
+      setLoadingReport(false)
+    }
+  }
+
+  const getPersonReports = (personKey: string): ReportMetadata[] => {
+    const person = peopleStorage.people[personKey]
+    if (!person) return []
+    
+    const allReports: ReportMetadata[] = []
+    person.conversationIds.forEach(convId => {
+      const conversation = peopleStorage.conversations[convId]
+      if (conversation?.reports) {
+        allReports.push(...conversation.reports)
+      }
+    })
+    
+    return allReports.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
   }
 
   const toggleArchivePerson = (personKey: string) => {
@@ -388,9 +568,55 @@ Please send me $500 right now via crypto!`
     return highlightedText
   }
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const generateThumbnail = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const img = new Image()
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          const maxSize = 200
+          let width = img.width
+          let height = img.height
+          
+          if (width > height) {
+            if (width > maxSize) {
+              height = (height * maxSize) / width
+              width = maxSize
+            }
+          } else {
+            if (height > maxSize) {
+              width = (width * maxSize) / height
+              height = maxSize
+            }
+          }
+          
+          canvas.width = width
+          canvas.height = height
+          const ctx = canvas.getContext('2d')
+          ctx?.drawImage(img, 0, 0, width, height)
+          
+          resolve(canvas.toDataURL('image/jpeg', 0.7))
+        }
+        img.onerror = reject
+        img.src = e.target?.result as string
+      }
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
+  }
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setSelectedFile(e.target.files[0])
+      const file = e.target.files[0]
+      setSelectedFile(file)
+      
+      try {
+        const thumbnail = await generateThumbnail(file)
+        setPendingPhotoThumbnail(thumbnail)
+      } catch (err) {
+        console.error('Failed to generate thumbnail:', err)
+      }
     }
   }
 
@@ -415,11 +641,20 @@ Please send me $500 right now via crypto!`
       
       const personName = newPersonName.trim() || scammerName.trim() || `Unknown ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}`
       
-      if (personName || scammerPhone || scammerEmail || victimNarrative) {
+      if (personName || scammerPhone || scammerEmail || victimNarrative || socialInstagram || socialFacebook || socialWhatsApp || socialLinkedIn || socialTwitter || socialOther) {
+        const socialHandles = []
+        if (socialInstagram) socialHandles.push({ platform: 'Instagram', username: socialInstagram })
+        if (socialFacebook) socialHandles.push({ platform: 'Facebook', username: socialFacebook })
+        if (socialWhatsApp) socialHandles.push({ platform: 'WhatsApp', username: socialWhatsApp })
+        if (socialLinkedIn) socialHandles.push({ platform: 'LinkedIn', username: socialLinkedIn })
+        if (socialTwitter) socialHandles.push({ platform: 'Twitter', username: socialTwitter })
+        if (socialOther) socialHandles.push({ platform: 'Other', username: socialOther })
+        
         const scammerProfile = {
           claimed_name: personName,
           phone_numbers: scammerPhone ? [scammerPhone] : null,
           email_addresses: scammerEmail ? [scammerEmail] : null,
+          social_handles: socialHandles.length > 0 ? socialHandles : null,
           victim_narrative: victimNarrative || null
         }
         formData.append('scammer_profile_json', JSON.stringify(scammerProfile))
@@ -442,7 +677,7 @@ Please send me $500 right now via crypto!`
       setReport(data)
       
       if (data.conversation_id) {
-        addOrUpdatePerson(data.conversation_id, data.trust_score)
+        addOrUpdatePerson(data.conversation_id, data.trust_score, data)
       }
       
       if (data.conversation_id) {
@@ -516,16 +751,36 @@ Please send me $500 right now via crypto!`
 
   const handleDownloadEvidenceReport = async () => {
     if (!report?.conversation_id) {
-      setError('No conversation ID available for this report')
+      console.error('No conversation ID available for this report')
+      setError('PDF download requires a fresh analysis. Please run a new analysis.')
       return
     }
 
     setDownloadingPdf(true)
     try {
-      const response = await fetch(`${API_URL}/evidence/generate/${report.conversation_id}`)
+      const pdfUrl = `${API_URL}/evidence/generate/${report.conversation_id}`
+      console.log('Downloading PDF from:', pdfUrl)
+      
+      const response = await fetch(pdfUrl)
+      console.log('PDF response status:', response.status, 'Content-Type:', response.headers.get('content-type'))
       
       if (!response.ok) {
-        throw new Error('Failed to generate evidence report')
+        const errorText = await response.text()
+        console.error('PDF generation failed:', response.status, errorText)
+        
+        if (response.status === 404) {
+          throw new Error('Report not found in database. PDF generation requires the conversation to be saved on the server.')
+        } else if (response.status === 500) {
+          throw new Error('PDF generation failed on the server. This feature is being improved. Please try again later.')
+        } else {
+          throw new Error(`Failed to generate PDF (${response.status}): ${errorText}`)
+        }
+      }
+
+      const contentType = response.headers.get('content-type')
+      if (!contentType?.includes('pdf')) {
+        console.error('Unexpected content type:', contentType)
+        throw new Error('Server did not return a PDF file')
       }
 
       const hash = response.headers.get('X-Report-Hash')
@@ -542,8 +797,11 @@ Please send me $500 right now via crypto!`
       a.click()
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
+      
+      console.log('PDF downloaded successfully')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to download evidence report')
+      console.error('Failed to download evidence report:', err)
+      setError(err instanceof Error ? err.message : 'Failed to download PDF. Please try again.')
     } finally {
       setDownloadingPdf(false)
     }
@@ -551,6 +809,11 @@ Please send me $500 right now via crypto!`
 
   return (
     <div className="relative min-h-screen bg-gradient-to-br from-[#5B3256] via-[#3C4B7C] to-[#E6B7BE] parallax-bg" style={{ fontFamily: "'Source Sans Pro', sans-serif" }}>
+      {/* Legal Acceptance Modal */}
+      {showLegalModal && (
+        <LegalAcceptanceModal onAccept={() => setShowLegalModal(false)} />
+      )}
+      
       <BottomTabs 
         activeTab={activeTab} 
         onTabChange={setActiveTab} 
@@ -558,14 +821,22 @@ Please send me $500 right now via crypto!`
       />
       <div className="pointer-events-none fixed inset-0 bg-black/20 z-0"></div>
       <div className="relative z-10 container mx-auto px-4 py-8 max-w-6xl pb-20 md:ml-64 md:pb-8">
+        {/* Guardian Tab */}
+        {activeTab === 'guardian' && (
+          <Guardian 
+            conversationId={report?.conversation_id} 
+            onNavigateToFamily={() => setActiveTab('family')}
+          />
+        )}
+        
         {/* Family Tab */}
         {activeTab === 'family' && <FamilyLink />}
         
         {/* More Tab */}
         {activeTab === 'more' && <More />}
         
-        {/* Home Tab - Original Content */}
-        {activeTab === 'home' && (
+        {/* Home Tab & Results Tab - Original Content */}
+        {(activeTab === 'home' || activeTab === 'results') && (
           <>
         <div className="text-center mb-8 animate-fade-in">
           <div className="flex items-center justify-center mb-4">
@@ -637,6 +908,17 @@ Please send me $500 right now via crypto!`
                       setCurrentPersonKey(null)
                       setNewPersonName('')
                       setNewPersonHint('')
+                      setScammerName('')
+                      setScammerPhone('')
+                      setScammerEmail('')
+                      setSocialInstagram('')
+                      setSocialFacebook('')
+                      setSocialWhatsApp('')
+                      setSocialLinkedIn('')
+                      setSocialTwitter('')
+                      setSocialOther('')
+                      setVictimNarrative('')
+                      setSuspectedIPs('')
                       setContinueSession(false)
                     }}
                     className={`flex-1 px-4 py-2 rounded-lg font-semibold transition-all ${
@@ -728,7 +1010,20 @@ Please send me $500 right now via crypto!`
                     {currentPersonKey && (
                       <div className="flex gap-2 p-1 bg-[#F5E8DC] rounded-xl">
                         <button
-                          onClick={() => setContinueSession(false)}
+                          onClick={() => {
+                            setContinueSession(false)
+                            setScammerName('')
+                            setScammerPhone('')
+                            setScammerEmail('')
+                            setSocialInstagram('')
+                            setSocialFacebook('')
+                            setSocialWhatsApp('')
+                            setSocialLinkedIn('')
+                            setSocialTwitter('')
+                            setSocialOther('')
+                            setVictimNarrative('')
+                            setSuspectedIPs('')
+                          }}
                           className={`flex-1 px-4 py-2 rounded-lg font-semibold transition-all ${
                             !continueSession 
                               ? 'bg-[#E6B7BE] text-[#5B3256] shadow-md' 
@@ -803,51 +1098,156 @@ Please send me $500 right now via crypto!`
                                 : 'bg-[#F5E8DC] border-[#E6B7BE] hover:border-[#3C4B7C]'
                             } ${person.archived ? 'opacity-60' : ''}`}
                             onClick={() => {
-                              loadPerson(person.personKey)
-                              setIsNewPerson(false)
+                              setSelectedPersonForHistory(person.personKey)
+                              setShowReportHistory(true)
                             }}
                           >
                             <div className="flex items-center justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-semibold text-[#5B3256]">
-                                    {person.displayName}
-                                  </span>
-                                  {person.hint && (
-                                    <span className="text-xs text-[#5B3256]/60">
-                                      ({person.hint})
+                              <div className="flex items-center flex-1">
+                                {person.photoUrl ? (
+                                  <img
+                                    src={person.photoUrl}
+                                    alt={person.displayName}
+                                    className="w-10 h-10 rounded-full object-cover shadow-sm cursor-pointer"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      setSelectedPhotoForView(person.photoUrl!)
+                                    }}
+                                  />
+                                ) : (
+                                  <div className="w-10 h-10 rounded-full bg-[#3C4B7C] flex items-center justify-center text-white font-semibold text-sm shadow-sm">
+                                    {person.displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                                  </div>
+                                )}
+                                <div className="flex-1 ml-3">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-[#5B3256]">
+                                      {person.displayName}
                                     </span>
-                                  )}
-                                  {person.archived && (
-                                    <Badge variant="outline" className="text-xs">
-                                      Archived
-                                    </Badge>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-3 mt-1 text-xs text-[#5B3256]/70">
-                                  <span>Score: {person.lastScore || 'N/A'}</span>
-                                  <span>•</span>
-                                  <span>{new Date(person.updatedAt).toLocaleDateString()}</span>
-                                  <span>•</span>
-                                  <span>{person.conversationIds.length} session(s)</span>
+                                    {person.hint && (
+                                      <span className="text-xs text-[#5B3256]/60">
+                                        ({person.hint})
+                                      </span>
+                                    )}
+                                    {person.archived && (
+                                      <Badge variant="outline" className="text-xs">
+                                        Archived
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-3 mt-1 text-xs text-[#5B3256]/70">
+                                    <span>Score: {person.lastScore || 'N/A'}</span>
+                                    <span>•</span>
+                                    <span>{new Date(person.updatedAt).toLocaleDateString()}</span>
+                                    <span>•</span>
+                                    <span>{person.reportCount || person.conversationIds.length} report(s)</span>
+                                  </div>
                                 </div>
                               </div>
-                              <Button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  toggleArchivePerson(person.personKey)
-                                }}
-                                variant="ghost"
-                                size="sm"
-                                className="text-[#5B3256]"
-                              >
-                                <Archive className="h-4 w-4" />
-                              </Button>
+                              <div className="flex gap-1">
+                                <Button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setSelectedPersonForHistory(person.personKey)
+                                    setShowReportHistory(true)
+                                  }}
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-[#3C4B7C]"
+                                  title="View Report History"
+                                >
+                                  <History className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    toggleArchivePerson(person.personKey)
+                                  }}
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-[#5B3256]"
+                                >
+                                  <Archive className="h-4 w-4" />
+                                </Button>
+                              </div>
                             </div>
                           </div>
                         ))
                       )}
                     </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Report History Modal */}
+        {showReportHistory && selectedPersonForHistory && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <Card className="bg-white max-w-2xl w-full max-h-[80vh] overflow-hidden">
+              <CardHeader className="border-b border-[#E6B7BE]">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-[#5B3256]" style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 700 }}>
+                    <History className="inline mr-2 h-5 w-5" />
+                    Report History - {peopleStorage.people[selectedPersonForHistory]?.displayName}
+                  </CardTitle>
+                  <Button
+                    onClick={() => {
+                      setShowReportHistory(false)
+                      setSelectedPersonForHistory(null)
+                    }}
+                    variant="ghost"
+                    size="sm"
+                    className="text-[#5B3256]"
+                  >
+                    <X className="h-5 w-5" />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="overflow-y-auto max-h-[60vh] p-6">
+                {loadingReport ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#5B3256]"></div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {getPersonReports(selectedPersonForHistory).length === 0 ? (
+                      <p className="text-center text-[#5B3256]/60 py-8">No reports found for this person</p>
+                    ) : (
+                      getPersonReports(selectedPersonForHistory).map((reportMeta, idx) => (
+                        <div
+                          key={reportMeta.reportId}
+                          className="p-4 border-2 border-[#E6B7BE] rounded-lg hover:border-[#3C4B7C] transition-all cursor-pointer bg-[#F5E8DC]"
+                          onClick={() => loadSpecificReport(reportMeta.reportId, reportMeta.conversationId)}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3">
+                                <span className={`text-2xl font-bold ${getTrustScoreColor(reportMeta.trustScore)}`}>
+                                  {reportMeta.trustScore}
+                                </span>
+                                <div>
+                                  <p className="font-semibold text-[#5B3256]">
+                                    {reportMeta.title}
+                                  </p>
+                                  <p className="text-xs text-[#5B3256]/60">
+                                    {new Date(reportMeta.timestamp).toLocaleString()}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="border-[#3C4B7C] text-[#3C4B7C]"
+                            >
+                              View Report
+                            </Button>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 )}
               </CardContent>
@@ -986,6 +1386,55 @@ Please send me $500 right now via crypto!`
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-[#5B3256] mb-2">
+                    Social Media Handles (Optional)
+                  </label>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <input
+                      type="text"
+                      value={socialInstagram}
+                      onChange={(e) => setSocialInstagram(e.target.value)}
+                      placeholder="Instagram username"
+                      className="w-full px-4 py-2 bg-[#F5E8DC] border-[#E6B7BE] border-2 rounded-xl text-[#5B3256] placeholder:text-[#5B3256]/50"
+                    />
+                    <input
+                      type="text"
+                      value={socialFacebook}
+                      onChange={(e) => setSocialFacebook(e.target.value)}
+                      placeholder="Facebook username"
+                      className="w-full px-4 py-2 bg-[#F5E8DC] border-[#E6B7BE] border-2 rounded-xl text-[#5B3256] placeholder:text-[#5B3256]/50"
+                    />
+                    <input
+                      type="text"
+                      value={socialWhatsApp}
+                      onChange={(e) => setSocialWhatsApp(e.target.value)}
+                      placeholder="WhatsApp number"
+                      className="w-full px-4 py-2 bg-[#F5E8DC] border-[#E6B7BE] border-2 rounded-xl text-[#5B3256] placeholder:text-[#5B3256]/50"
+                    />
+                    <input
+                      type="text"
+                      value={socialLinkedIn}
+                      onChange={(e) => setSocialLinkedIn(e.target.value)}
+                      placeholder="LinkedIn username"
+                      className="w-full px-4 py-2 bg-[#F5E8DC] border-[#E6B7BE] border-2 rounded-xl text-[#5B3256] placeholder:text-[#5B3256]/50"
+                    />
+                    <input
+                      type="text"
+                      value={socialTwitter}
+                      onChange={(e) => setSocialTwitter(e.target.value)}
+                      placeholder="Twitter/X username"
+                      className="w-full px-4 py-2 bg-[#F5E8DC] border-[#E6B7BE] border-2 rounded-xl text-[#5B3256] placeholder:text-[#5B3256]/50"
+                    />
+                    <input
+                      type="text"
+                      value={socialOther}
+                      onChange={(e) => setSocialOther(e.target.value)}
+                      placeholder="Other social media"
+                      className="w-full px-4 py-2 bg-[#F5E8DC] border-[#E6B7BE] border-2 rounded-xl text-[#5B3256] placeholder:text-[#5B3256]/50"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-[#5B3256] mb-2">
                     Suspected IP Addresses (Optional)
                   </label>
                   <div className="flex gap-2">
@@ -1116,6 +1565,18 @@ Please send me $500 right now via crypto!`
 
         {report && (
           <div className="space-y-6">
+            {/* Warning Banner */}
+            <WarningBanner 
+              trustScore={report.trust_score}
+              hasCriticalPatterns={
+                report.chat_analysis?.manipulation_patterns?.some(
+                  p => p.pattern_type === 'Financial Request' || 
+                       p.pattern_type === 'Cryptocurrency Request' ||
+                       p.severity === 'Critical'
+                ) || false
+              }
+            />
+            
             <Card className={`border-4 ${getTrustScoreBg(report.trust_score)}`}>
               <CardHeader>
                 <CardTitle className="text-center text-3xl">Trust Score Report</CardTitle>
@@ -1164,6 +1625,9 @@ Please send me $500 right now via crypto!`
                     </div>
                   </div>
                 )}
+                
+                {/* Trust Score Disclaimer */}
+                <LegalDisclaimer variant="inline" context="trustscore" />
               </CardContent>
             </Card>
 
@@ -1196,6 +1660,9 @@ Please send me $500 right now via crypto!`
                       </>
                     )}
                   </Button>
+                  
+                  {/* Evidence Locker Disclaimer */}
+                  <LegalDisclaimer variant="inline" context="evidence" />
 
                   <Button
                     onClick={() => setShowGuardianMode(true)}
@@ -1602,6 +2069,31 @@ Please send me $500 right now via crypto!`
           </p>
           <p className="opacity-90">HeartGuard™ - Empowering safer connections through compassionate AI</p>
         </div>
+        
+        {/* Footer with Legal Links */}
+        <footer className="mt-12 pt-6 border-t border-white/20 text-center text-white/80 text-sm">
+          <div className="flex justify-center gap-6 mb-4">
+            <a href="/legal/terms-of-service" target="_blank" className="hover:text-white underline">
+              Terms of Service
+            </a>
+            <a href="/legal/privacy-policy" target="_blank" className="hover:text-white underline">
+              Privacy Policy
+            </a>
+            <a href="mailto:legal@heartguard.app" className="hover:text-white underline">
+              Contact Legal
+            </a>
+          </div>
+          <div className="text-xs text-white/60 max-w-3xl mx-auto">
+            <p className="mb-2">
+              <strong>Disclaimer:</strong> HeartGuard™ provides AI-powered analysis for informational purposes only. 
+              Not legal, financial, or professional advice. No guarantee of accuracy. Not a Consumer Reporting Agency. 
+              Not for FCRA-regulated purposes. Always verify information independently and contact authorities for suspected crimes.
+            </p>
+          </div>
+          <p className="mt-3 text-xs text-white/50">
+            © 2025 HeartGuard™. All rights reserved. | Version 1.0
+          </p>
+        </footer>
           </>
         )}
       </div>
@@ -1614,8 +2106,41 @@ Please send me $500 right now via crypto!`
           onClose={() => setShowGuardianMode(false)}
         />
       )}
+      
+      {/* Photo Viewer Modal */}
+      {selectedPhotoForView && (
+        <div 
+          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+          onClick={() => setSelectedPhotoForView(null)}
+        >
+          <div className="relative max-w-4xl max-h-[90vh]">
+            <Button
+              onClick={() => setSelectedPhotoForView(null)}
+              variant="ghost"
+              size="sm"
+              className="absolute -top-12 right-0 text-white hover:bg-white/20"
+            >
+              <X className="h-6 w-6" />
+            </Button>
+            <img
+              src={selectedPhotoForView}
+              alt="Profile photo"
+              className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
-export default App
+function AppRouter() {
+  if (isLandingPage()) {
+    return <Landing />
+  }
+  
+  return <App />
+}
+
+export default AppRouter

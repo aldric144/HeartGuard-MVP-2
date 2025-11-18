@@ -1,29 +1,15 @@
 """
-ToneShift™ NLP Engine - Production-ready AI model for detecting manipulation patterns
-Uses DistilBERT for text classification and sentiment analysis
+ToneShift™ NLP Engine - Lightweight sentiment analysis for detecting manipulation patterns
+Uses TextBlob for fast, efficient text analysis without heavy ML dependencies
 """
 
-import torch
-from transformers import DistilBertTokenizer, DistilBertForSequenceClassification
-from transformers import pipeline
-import numpy as np
-from typing import List, Dict, Tuple
+from textblob import TextBlob
+from typing import List, Dict
 import re
 
 class ToneShiftEngine:
     def __init__(self):
-        """Initialize the ToneShift™ NLP Engine with DistilBERT models"""
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        
-        self.sentiment_analyzer = pipeline(
-            "sentiment-analysis",
-            model="distilbert-base-uncased-finetuned-sst-2-english",
-            device=0 if self.device == "cuda" else -1
-        )
-        
-        self.tokenizer = DistilBertTokenizer.from_pretrained("distilbert-base-uncased")
-        
-        self.manipulation_model = self._create_mock_finetuned_model()
+        """Initialize the ToneShift™ NLP Engine with TextBlob"""
         
         self.pattern_keywords = {
             "love_bombing": [
@@ -51,18 +37,6 @@ class ToneShiftEngine:
             ]
         }
     
-    def _create_mock_finetuned_model(self):
-        """
-        Create a mock fine-tuned DistilBERT model for manipulation detection
-        In production, this would be trained on labeled scam conversation data
-        """
-        model = DistilBertForSequenceClassification.from_pretrained(
-            "distilbert-base-uncased",
-            num_labels=6  # 6 manipulation pattern types
-        )
-        model.to(self.device)
-        model.eval()
-        return model
     
     def analyze_message(self, text: str) -> Dict:
         """
@@ -74,20 +48,22 @@ class ToneShiftEngine:
         Returns:
             Dictionary containing sentiment scores and detected patterns
         """
-        sentiment_result = self.sentiment_analyzer(text[:512])[0]  # Limit to 512 tokens
+        blob = TextBlob(text)
         
-        polarity = sentiment_result['score'] if sentiment_result['label'] == 'POSITIVE' else -sentiment_result['score']
-        
-        subjectivity = self._calculate_subjectivity(text)
+        polarity = blob.sentiment.polarity
+        subjectivity = blob.sentiment.subjectivity
         
         patterns = self._detect_patterns(text)
+        
+        sentiment_label = 'POSITIVE' if polarity > 0 else 'NEGATIVE' if polarity < 0 else 'NEUTRAL'
+        sentiment_confidence = abs(polarity)
         
         return {
             "polarity": polarity,
             "subjectivity": subjectivity,
             "patterns": patterns,
-            "sentiment_label": sentiment_result['label'],
-            "sentiment_confidence": sentiment_result['score']
+            "sentiment_label": sentiment_label,
+            "sentiment_confidence": sentiment_confidence
         }
     
     def _calculate_subjectivity(self, text: str) -> float:
@@ -248,7 +224,9 @@ class ToneShiftEngine:
         
         if len(sentiment_drift) > 1:
             polarities = [s['polarity'] for s in sentiment_drift]
-            volatility = np.std(polarities)
+            mean_polarity = sum(polarities) / len(polarities)
+            variance = sum((p - mean_polarity) ** 2 for p in polarities) / len(polarities)
+            volatility = variance ** 0.5  # Standard deviation
             volatility_score = min(1.0, volatility)
         else:
             volatility_score = 0.0

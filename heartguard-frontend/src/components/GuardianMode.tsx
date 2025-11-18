@@ -49,14 +49,11 @@ export function GuardianMode({ conversationId, onClose }: GuardianModeProps) {
   const [newContactThreshold, setNewContactThreshold] = useState(40)
 
   const fetchContacts = async () => {
-    if (!conversationId) {
-      setContacts([])
-      return
-    }
+    const identifier = 'global'
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch(`${API_URL}/guardian/contacts/${conversationId}`)
+      const response = await fetch(`${API_URL}/guardian/contacts/${identifier}`)
       if (response.ok) {
         const data = await response.json()
         setContacts(data.contacts || [])
@@ -71,14 +68,11 @@ export function GuardianMode({ conversationId, onClose }: GuardianModeProps) {
   }
 
   const fetchAlerts = async () => {
-    if (!conversationId) {
-      setAlerts([])
-      return
-    }
+    const identifier = conversationId || 'global'
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch(`${API_URL}/guardian/alerts/${conversationId}`)
+      const response = await fetch(`${API_URL}/guardian/alerts/${identifier}`)
       if (response.ok) {
         const data = await response.json()
         setAlerts(data.alerts || [])
@@ -107,7 +101,7 @@ export function GuardianMode({ conversationId, onClose }: GuardianModeProps) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          user_identifier: conversationId || 'global',
+          user_identifier: 'global',
           contact_name: newContactName,
           contact_email: newContactEmail,
           contact_phone: newContactPhone || null,
@@ -395,12 +389,22 @@ export function GuardianMode({ conversationId, onClose }: GuardianModeProps) {
                             <div className="space-y-1 text-sm text-[#5B3256]/70">
                               <div className="flex items-center gap-2">
                                 <Mail className="w-4 h-4" />
-                                {contact.contact_email}
+                                <a 
+                                  href={`mailto:${contact.contact_email}`}
+                                  className="text-[#3C4B7C] hover:underline"
+                                >
+                                  {contact.contact_email}
+                                </a>
                               </div>
                               {contact.contact_phone && (
                                 <div className="flex items-center gap-2">
                                   <Phone className="w-4 h-4" />
-                                  {contact.contact_phone}
+                                  <a 
+                                    href={`tel:${contact.contact_phone}`}
+                                    className="text-[#3C4B7C] hover:underline"
+                                  >
+                                    {contact.contact_phone}
+                                  </a>
                                 </div>
                               )}
                               {contact.last_alert_timestamp && (
