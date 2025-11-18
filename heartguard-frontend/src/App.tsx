@@ -18,8 +18,17 @@ import { Guardian } from '@/pages/Guardian'
 import { WarningBanner } from '@/components/WarningBanner'
 import { LegalAcceptanceModal, checkLegalAcceptance } from '@/components/LegalAcceptanceModal'
 import { LegalDisclaimer } from '@/components/LegalDisclaimer'
+import { Landing } from '@/pages/Landing'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
+function isLandingPage() {
+  return window.location.pathname === '/' || window.location.pathname === ''
+}
+
+function isAppPage() {
+  return window.location.pathname.startsWith('/app')
+}
 
 interface ManipulationPattern {
   pattern_type: string
@@ -2000,4 +2009,12 @@ Please send me $500 right now via crypto!`
   )
 }
 
-export default App
+function AppRouter() {
+  if (isLandingPage()) {
+    return <Landing />
+  }
+  
+  return <App />
+}
+
+export default AppRouter
