@@ -49,7 +49,7 @@ export function GuardianMode({ conversationId, onClose }: GuardianModeProps) {
   const [newContactThreshold, setNewContactThreshold] = useState(40)
 
   const fetchContacts = async () => {
-    const identifier = conversationId || 'global'
+    const identifier = 'global'
     setLoading(true)
     setError(null)
     try {
@@ -101,7 +101,7 @@ export function GuardianMode({ conversationId, onClose }: GuardianModeProps) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          user_identifier: conversationId || 'global',
+          user_identifier: 'global',
           contact_name: newContactName,
           contact_email: newContactEmail,
           contact_phone: newContactPhone || null,
