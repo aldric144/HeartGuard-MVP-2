@@ -690,15 +690,28 @@ Please send me $500 right now via crypto!`
   const handleDownloadEvidenceReport = async () => {
     if (!report?.conversation_id) {
       console.error('No conversation ID available for this report')
+      setError('PDF download requires a fresh analysis. Please run a new analysis.')
       return
     }
 
     setDownloadingPdf(true)
     try {
-      const response = await fetch(`${API_URL}/evidence/generate/${report.conversation_id}`)
+      const pdfUrl = `${API_URL}/evidence/generate/${report.conversation_id}`
+      console.log('Downloading PDF from:', pdfUrl)
+      
+      const response = await fetch(pdfUrl)
+      console.log('PDF response status:', response.status, 'Content-Type:', response.headers.get('content-type'))
       
       if (!response.ok) {
-        throw new Error('Failed to generate evidence report')
+        const errorText = await response.text()
+        console.error('PDF generation failed:', response.status, errorText)
+        throw new Error(`Failed to generate PDF (${response.status}): ${errorText}`)
+      }
+
+      const contentType = response.headers.get('content-type')
+      if (!contentType?.includes('pdf')) {
+        console.error('Unexpected content type:', contentType)
+        throw new Error('Server did not return a PDF file')
       }
 
       const hash = response.headers.get('X-Report-Hash')
@@ -715,8 +728,11 @@ Please send me $500 right now via crypto!`
       a.click()
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
+      
+      console.log('PDF downloaded successfully')
     } catch (err) {
       console.error('Failed to download evidence report:', err)
+      setError(err instanceof Error ? err.message : 'Failed to download PDF. Please try again.')
     } finally {
       setDownloadingPdf(false)
     }

@@ -1387,63 +1387,75 @@ async def generate_evidence_report(
     Returns:
         StreamingResponse with PDF file
     """
-    from app.models.database import Conversation as DBConversation, AnalysisPoint as DBAnalysisPoint, EvidenceReport as DBEvidenceReport
-    
-    conversation = db.query(DBConversation).filter(DBConversation.id == conversation_id).first()
-    
-    if not conversation:
-        raise HTTPException(status_code=404, detail=f"Conversation {conversation_id} not found")
-    
-    analysis_points = db.query(DBAnalysisPoint).filter(
-        DBAnalysisPoint.conversation_id == conversation_id
-    ).order_by(DBAnalysisPoint.message_index.asc()).all()
-    
-    geographic_risk = None
-    phone_code_to_use = phone_code or conversation.phone_code
-    
-    if phone_code_to_use:
-        normalized_code = normalize_phone_number(phone_code_to_use)
-        geographic_risk = db.query(GeographicRisk).filter(
-            GeographicRisk.code == normalized_code
-        ).first()
-    
-    scammer_profile = None
-    if hasattr(conversation, 'scammer_profile') and conversation.scammer_profile:
-        scammer_profile = conversation.scammer_profile
-    
-    app_version = os.getenv("APP_VERSION", "1.0.0")
-    backend_version = os.getenv("BACKEND_VERSION", "1.0.0")
-    
-    pdf_buffer, dataset_hash, report_data = generate_evidence_pdf(
-        conversation, 
-        analysis_points, 
-        geographic_risk,
-        scammer_profile,
-        app_version,
-        backend_version
-    )
-    
-    evidence_report = DBEvidenceReport(
-        conversation_id=conversation_id,
-        dataset_hash=dataset_hash,
-        report_data=report_data,
-        app_version=app_version,
-        backend_version=backend_version
-    )
-    db.add(evidence_report)
-    db.commit()
-    
-    timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-    filename = f"HeartGuard_Evidence_{conversation_id[:8]}_{timestamp}.pdf"
-    
-    return StreamingResponse(
-        pdf_buffer,
-        media_type="application/pdf",
-        headers={
-            "Content-Disposition": f"attachment; filename={filename}",
-            "X-Report-Hash": dataset_hash
-        }
-    )
+    try:
+        from app.models.database import Conversation as DBConversation, AnalysisPoint as DBAnalysisPoint, EvidenceReport as DBEvidenceReport
+        
+        conversation = db.query(DBConversation).filter(DBConversation.id == conversation_id).first()
+        
+        if not conversation:
+            raise HTTPException(status_code=404, detail=f"Conversation {conversation_id} not found")
+        
+        analysis_points = db.query(DBAnalysisPoint).filter(
+            DBAnalysisPoint.conversation_id == conversation_id
+        ).order_by(DBAnalysisPoint.message_index.asc()).all()
+        
+        geographic_risk = None
+        phone_code_to_use = phone_code or conversation.phone_code
+        
+        if phone_code_to_use:
+            normalized_code = normalize_phone_number(phone_code_to_use)
+            geographic_risk = db.query(GeographicRisk).filter(
+                GeographicRisk.code == normalized_code
+            ).first()
+        
+        scammer_profile = None
+        if hasattr(conversation, 'scammer_profile') and conversation.scammer_profile:
+            scammer_profile = conversation.scammer_profile
+        
+        app_version = os.getenv("APP_VERSION", "1.0.0")
+        backend_version = os.getenv("BACKEND_VERSION", "1.0.0")
+        
+        pdf_buffer, dataset_hash, report_data = generate_evidence_pdf(
+            conversation, 
+            analysis_points, 
+            geographic_risk,
+            scammer_profile,
+            app_version,
+            backend_version
+        )
+        
+        evidence_report = DBEvidenceReport(
+            conversation_id=conversation_id,
+            dataset_hash=dataset_hash,
+            report_data=report_data,
+            app_version=app_version,
+            backend_version=backend_version
+        )
+        db.add(evidence_report)
+        db.commit()
+        
+        timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+        filename = f"HeartGuard_Evidence_{conversation_id[:8]}_{timestamp}.pdf"
+        
+        return StreamingResponse(
+            pdf_buffer,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}",
+                "X-Report-Hash": dataset_hash
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"PDF generation error: {str(e)}")
+        print(error_details)
+        raise HTTPException(
+            status_code=500, 
+            detail=f"PDF generation failed: {str(e)}"
+        )
 
 
 @app.get("/evidence/verify")
