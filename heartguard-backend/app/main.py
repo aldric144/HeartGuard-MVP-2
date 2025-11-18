@@ -1410,7 +1410,11 @@ async def generate_evidence_report(
         
         scammer_profile = None
         if hasattr(conversation, 'scammer_profile') and conversation.scammer_profile:
-            scammer_profile = conversation.scammer_profile
+            # scammer_profile is a list due to backref, get the first item
+            if isinstance(conversation.scammer_profile, list) and len(conversation.scammer_profile) > 0:
+                scammer_profile = conversation.scammer_profile[0]
+            elif not isinstance(conversation.scammer_profile, list):
+                scammer_profile = conversation.scammer_profile
         
         app_version = os.getenv("APP_VERSION", "1.0.0")
         backend_version = os.getenv("BACKEND_VERSION", "1.0.0")
