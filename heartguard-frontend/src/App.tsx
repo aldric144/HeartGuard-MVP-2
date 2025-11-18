@@ -856,6 +856,15 @@ Please send me $500 right now via crypto!`
                       setNewPersonName('')
                       setNewPersonHint('')
                       setScammerName('')
+                      setScammerPhone('')
+                      setScammerEmail('')
+                      setSocialInstagram('')
+                      setSocialFacebook('')
+                      setSocialWhatsApp('')
+                      setSocialLinkedIn('')
+                      setSocialTwitter('')
+                      setSocialOther('')
+                      setVictimNarrative('')
                       setContinueSession(false)
                     }}
                     className={`flex-1 px-4 py-2 rounded-lg font-semibold transition-all ${
@@ -950,6 +959,15 @@ Please send me $500 right now via crypto!`
                           onClick={() => {
                             setContinueSession(false)
                             setScammerName('')
+                            setScammerPhone('')
+                            setScammerEmail('')
+                            setSocialInstagram('')
+                            setSocialFacebook('')
+                            setSocialWhatsApp('')
+                            setSocialLinkedIn('')
+                            setSocialTwitter('')
+                            setSocialOther('')
+                            setVictimNarrative('')
                           }}
                           className={`flex-1 px-4 py-2 rounded-lg font-semibold transition-all ${
                             !continueSession 
