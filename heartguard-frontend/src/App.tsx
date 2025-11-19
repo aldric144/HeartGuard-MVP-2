@@ -2063,16 +2063,15 @@ Please send me $500 right now via crypto!`
         )}
 
         <div className="mt-12 text-center text-[#F5E8DC] text-sm">
-          <p className="mb-2">
-            <strong className="text-white">Note:</strong> This is a proof-of-concept demo using
-            in-memory storage. Data will be lost when the server restarts.
-          </p>
           <p className="opacity-90">HeartGuard™ - Empowering safer connections through compassionate AI</p>
         </div>
         
         {/* Footer with Legal Links */}
         <footer className="mt-12 pt-6 border-t border-white/20 text-center text-white/80 text-sm">
           <div className="flex justify-center gap-6 mb-4">
+            <a href="/" className="hover:text-white underline">
+              About & Pricing
+            </a>
             <a href="/legal/terms-of-service" target="_blank" className="hover:text-white underline">
               Terms of Service
             </a>

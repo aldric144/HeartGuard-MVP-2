@@ -1,4 +1,4 @@
-import { Shield, Globe, Lock, Accessibility, ArrowRight } from 'lucide-react'
+import { Shield, Globe, Lock, Accessibility, ArrowRight, Info } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useNavigate } from 'react-router-dom'
 
@@ -60,6 +60,30 @@ export function More() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* About & Pricing Card */}
+          <Card 
+            className="hover:shadow-lg transition-shadow cursor-pointer border-2 border-[#3C4B7C]"
+            onClick={() => window.location.href = '/'}
+          >
+            <CardHeader>
+              <div className="flex items-start justify-between">
+                <div className="p-3 rounded-lg bg-[#3C4B7C]/10 mb-4">
+                  <Info className="w-6 h-6 text-[#3C4B7C]" />
+                </div>
+              </div>
+              <CardTitle className="text-xl text-[#5B3256]">About & Pricing</CardTitle>
+              <CardDescription className="text-[#5B3256]/70">
+                Learn more about HeartGuard and view subscription plans
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <button className="flex items-center gap-2 text-sm font-semibold text-[#3C4B7C] hover:text-[#5B3256] transition-colors">
+                View Landing Page
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </CardContent>
+          </Card>
+
           {features.map((feature) => {
             const Icon = feature.icon
             return (
