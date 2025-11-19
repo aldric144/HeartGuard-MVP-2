@@ -9,6 +9,8 @@ export function Landing() {
     element?.scrollIntoView({ behavior: 'smooth' })
   }
 
+  const heroImage = null // Will be: '/images/landing/hero.jpg' when image is added
+
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
@@ -52,9 +54,27 @@ export function Landing() {
 
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-gradient-to-br from-[#2C2347] via-[#3C345C] to-[#C7A0A3] text-white py-20 md:py-32">
-        {/* Floating orbs */}
-        <div className="absolute top-20 left-10 w-64 h-64 bg-[#E4B5C2] rounded-full opacity-20 blur-3xl animate-float"></div>
-        <div className="absolute bottom-20 right-10 w-96 h-96 bg-[#D67A83] rounded-full opacity-20 blur-3xl animate-float-delayed"></div>
+        {/* Hero Image (if configured) */}
+        {heroImage && (
+          <div className="absolute inset-0 z-0">
+            <img 
+              src={heroImage} 
+              alt="HeartGuard Hero" 
+              className="w-full h-full object-cover"
+              loading="eager"
+            />
+            {/* Dark overlay for text readability */}
+            <div className="absolute inset-0 bg-gradient-to-br from-[#2C2347]/80 via-[#3C345C]/70 to-[#C7A0A3]/60"></div>
+          </div>
+        )}
+        
+        {/* Floating orbs (only show if no hero image) */}
+        {!heroImage && (
+          <>
+            <div className="absolute top-20 left-10 w-64 h-64 bg-[#E4B5C2] rounded-full opacity-20 blur-3xl animate-float"></div>
+            <div className="absolute bottom-20 right-10 w-96 h-96 bg-[#D67A83] rounded-full opacity-20 blur-3xl animate-float-delayed"></div>
+          </>
+        )}
         
         <div className="container mx-auto px-4 relative z-10">
           <div className="max-w-4xl mx-auto text-center">
