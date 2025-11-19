@@ -54,59 +54,55 @@ export function Landing() {
 
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-gradient-to-br from-[#2C2347] via-[#3C345C] to-[#C7A0A3] text-white py-20 md:py-32">
-        {/* Hero Image (if configured) */}
-        {heroImage && (
-          <div className="absolute inset-0 z-0">
-            <img 
-              src={heroImage} 
-              alt="HeartGuard Hero" 
-              className="w-full h-full object-cover"
-              loading="eager"
-            />
-            {/* Dark overlay for text readability */}
-            <div className="absolute inset-0 bg-gradient-to-br from-[#2C2347]/80 via-[#3C345C]/70 to-[#C7A0A3]/60"></div>
-          </div>
-        )}
-        
-        {/* Floating orbs (only show if no hero image) */}
-        {!heroImage && (
-          <>
-            <div className="absolute top-20 left-10 w-64 h-64 bg-[#E4B5C2] rounded-full opacity-20 blur-3xl animate-float"></div>
-            <div className="absolute bottom-20 right-10 w-96 h-96 bg-[#D67A83] rounded-full opacity-20 blur-3xl animate-float-delayed"></div>
-          </>
-        )}
+        {/* Floating orbs */}
+        <div className="absolute top-20 left-10 w-64 h-64 bg-[#E4B5C2] rounded-full opacity-20 blur-3xl animate-float"></div>
+        <div className="absolute bottom-20 right-10 w-96 h-96 bg-[#D67A83] rounded-full opacity-20 blur-3xl animate-float-delayed"></div>
         
         <div className="container mx-auto px-4 relative z-10">
-          <div className="max-w-4xl mx-auto text-center">
-            <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-6 animate-fade-in" style={{ fontFamily: "'Nunito', sans-serif" }}>
-              Your Heart. Protected by AI.
-            </h1>
-            <p className="text-xl md:text-2xl mb-8 text-white/90 animate-fade-in-delayed">
-              HeartGuard™ detects romance scams before they can trap you—using emotional intelligence, photo forensics, and real-time fraud detection.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center animate-fade-in-delayed-2">
-              <Button 
-                size="lg"
-                onClick={() => window.location.href = '/app'}
-                className="bg-white text-[#2C2347] hover:bg-[#F9EDE2] text-lg px-8 py-6"
-                style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 700 }}
-              >
-                <Download className="mr-2 h-5 w-5" />
-                Download on the App Store
-              </Button>
-              <Button 
-                size="lg"
-                onClick={() => window.location.href = '/app'}
-                variant="outline"
-                className="bg-transparent border-2 border-white text-white hover:bg-white/10 text-lg px-8 py-6"
-                style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 700 }}
-              >
-                Get HeartGuard Now
-              </Button>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center max-w-7xl mx-auto">
+            {/* Left column - Text content */}
+            <div className="text-center md:text-left">
+              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 animate-fade-in" style={{ fontFamily: "'Nunito', sans-serif" }}>
+                Your Heart. Protected by AI.
+              </h1>
+              <p className="text-lg md:text-xl mb-8 text-white/90 animate-fade-in-delayed">
+                HeartGuard™ detects romance scams before they can trap you—using emotional intelligence, photo forensics, and real-time fraud detection.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start items-center animate-fade-in-delayed-2">
+                <Button 
+                  size="lg"
+                  onClick={() => window.location.href = '/app'}
+                  className="bg-white text-[#2C2347] hover:bg-[#F9EDE2] text-lg px-8 py-6"
+                  style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 700 }}
+                >
+                  <Download className="mr-2 h-5 w-5" />
+                  Download on the App Store
+                </Button>
+                <Button 
+                  size="lg"
+                  onClick={() => window.location.href = '/app'}
+                  variant="outline"
+                  className="bg-transparent border-2 border-white text-white hover:bg-white/10 text-lg px-8 py-6"
+                  style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 700 }}
+                >
+                  Get HeartGuard Now
+                </Button>
+              </div>
+              <p className="mt-6 text-sm text-white/70 text-center md:text-left">
+                Coming soon to the App Store and Google Play
+              </p>
             </div>
-            <p className="mt-6 text-sm text-white/70">
-              Coming soon to the App Store and Google Play
-            </p>
+
+            {/* Right column - Hero image */}
+            <div className="relative aspect-[4/3] rounded-lg overflow-hidden shadow-2xl">
+              <img 
+                src="/images/landing/hero-woman-laptop.jpg" 
+                alt="Person using a laptop at home" 
+                className="w-full h-full object-cover"
+                loading="eager"
+              />
+              <div className="absolute inset-0 bg-gradient-to-tr from-black/20 via-transparent to-transparent"></div>
+            </div>
           </div>
         </div>
       </section>
@@ -114,20 +110,33 @@ export function Landing() {
       {/* Problem / Pain Section */}
       <section className="py-16 md:py-24 bg-[#F9EDE2]">
         <div className="container mx-auto px-4">
-          <div className="max-w-3xl mx-auto text-center">
-            <h2 className="text-3xl md:text-4xl font-bold text-[#2C2347] mb-6" style={{ fontFamily: "'Nunito', sans-serif" }}>
-              Romance Scams Manipulate Emotions
-            </h2>
-            <p className="text-lg text-[#2A2A2A] mb-6 leading-relaxed">
-              Scammers use sophisticated psychological tactics to build trust, create emotional dependency, and exploit vulnerability. They craft fake identities, fabricate emergencies, and pressure victims into sending money—often leaving lasting emotional and financial damage.
-            </p>
-            <p className="text-lg text-[#2A2A2A] mb-8 leading-relaxed">
-              This isn't your fault. Scams are designed to bypass rational thinking by targeting our deepest human needs for connection and love.
-            </p>
-            <div className="inline-block bg-gradient-to-r from-[#2C2347] to-[#3C345C] text-white px-8 py-4 rounded-lg">
-              <p className="text-2xl font-bold" style={{ fontFamily: "'Nunito', sans-serif" }}>
-                "Healing begins with truth."
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center max-w-6xl mx-auto">
+            {/* Left column - Text content */}
+            <div>
+              <h2 className="text-3xl md:text-4xl font-bold text-[#2C2347] mb-6" style={{ fontFamily: "'Nunito', sans-serif" }}>
+                Romance Scams Manipulate Emotions
+              </h2>
+              <p className="text-lg text-[#2A2A2A] mb-6 leading-relaxed">
+                Scammers use sophisticated psychological tactics to build trust, create emotional dependency, and exploit vulnerability. They craft fake identities, fabricate emergencies, and pressure victims into sending money—often leaving lasting emotional and financial damage.
               </p>
+              <p className="text-lg text-[#2A2A2A] mb-8 leading-relaxed">
+                This isn't your fault. Scams are designed to bypass rational thinking by targeting our deepest human needs for connection and love.
+              </p>
+              <div className="inline-block bg-gradient-to-r from-[#2C2347] to-[#3C345C] text-white px-8 py-4 rounded-lg">
+                <p className="text-2xl font-bold" style={{ fontFamily: "'Nunito', sans-serif" }}>
+                  "Healing begins with truth."
+                </p>
+              </div>
+            </div>
+
+            {/* Right column - Image */}
+            <div className="relative aspect-[4/3] rounded-lg overflow-hidden shadow-md">
+              <img 
+                src="/images/landing/section-businessman.jpg" 
+                alt="Professional reviewing information on a laptop by a window" 
+                className="w-full h-full object-cover"
+                loading="lazy"
+              />
             </div>
           </div>
         </div>
@@ -353,6 +362,29 @@ export function Landing() {
             </p>
           </div>
 
+          {/* Intro with image */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center max-w-6xl mx-auto mb-12">
+            {/* Left column - Image */}
+            <div className="relative aspect-[4/3] rounded-lg overflow-hidden shadow-md">
+              <img 
+                src="/images/landing/section-sofa-woman.jpg" 
+                alt="Person using a laptop on a sofa" 
+                className="w-full h-full object-cover"
+                loading="lazy"
+              />
+            </div>
+
+            {/* Right column - Description */}
+            <div>
+              <h3 className="text-2xl md:text-3xl font-bold text-[#2C2347] mb-4" style={{ fontFamily: "'Nunito', sans-serif" }}>
+                Instant Trust Score Analysis
+              </h3>
+              <p className="text-lg text-[#2A2A2A] leading-relaxed">
+                Our AI-powered system analyzes your conversations and photos in seconds, providing you with a comprehensive trust score from 0-100. Get instant clarity on whether someone is genuine or potentially dangerous.
+              </p>
+            </div>
+          </div>
+
           <div className="max-w-4xl mx-auto">
             <div className="grid md:grid-cols-3 gap-8">
               {/* Step 1 */}
@@ -420,6 +452,49 @@ export function Landing() {
             <p className="text-xl text-[#2A2A2A]/70 max-w-2xl mx-auto">
               Powerful protection with an intuitive, beautiful interface
             </p>
+          </div>
+
+          {/* Feature highlights with images */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-6xl mx-auto mb-16">
+            {/* Guardian Mode */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+              <div className="relative aspect-[4/3] rounded-lg overflow-hidden shadow-md">
+                <img 
+                  src="/images/landing/section-joyful-woman.jpg" 
+                  alt="Person smiling while using a laptop at home" 
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-[#2C2347] mb-3" style={{ fontFamily: "'Nunito', sans-serif" }}>
+                  Guardian Mode™
+                </h3>
+                <p className="text-[#2A2A2A]/70">
+                  Real-time monitoring with smart alerts to protect you and your loved ones from emerging threats.
+                </p>
+              </div>
+            </div>
+
+            {/* Scam Hotspot Map */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+              <div className="md:order-last">
+                <h3 className="text-xl font-bold text-[#2C2347] mb-3" style={{ fontFamily: "'Nunito', sans-serif" }}>
+                  Scam Hotspot Map™
+                </h3>
+                <p className="text-[#2A2A2A]/70">
+                  Global intelligence showing high-risk phone code origins and scam types by region worldwide.
+                </p>
+              </div>
+              <div className="relative aspect-[4/3] rounded-lg overflow-hidden shadow-md md:order-first">
+                <img 
+                  src="/images/landing/section-dock-woman.jpg" 
+                  alt="Person relaxing by the water" 
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
+              </div>
+            </div>
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -804,29 +879,45 @@ export function Landing() {
                 </ul>
               </div>
 
-              <div className="bg-gradient-to-br from-[#2C2347] to-[#C7A0A3] rounded-2xl p-8 text-white">
-                <h4 className="text-xl font-bold mb-4" style={{ fontFamily: "'Nunito', sans-serif" }}>
-                  How FamilyLink™ Works
-                </h4>
-                <ol className="space-y-4">
-                  <li className="flex gap-3">
-                    <span className="flex-shrink-0 w-8 h-8 bg-white/20 rounded-full flex items-center justify-center font-bold">1</span>
-                    <p>Add trusted family members as contacts</p>
-                  </li>
-                  <li className="flex gap-3">
-                    <span className="flex-shrink-0 w-8 h-8 bg-white/20 rounded-full flex items-center justify-center font-bold">2</span>
-                    <p>Set alert thresholds for concerning patterns</p>
-                  </li>
-                  <li className="flex gap-3">
-                    <span className="flex-shrink-0 w-8 h-8 bg-white/20 rounded-full flex items-center justify-center font-bold">3</span>
-                    <p>Receive instant notifications when risks are detected</p>
-                  </li>
-                  <li className="flex gap-3">
-                    <span className="flex-shrink-0 w-8 h-8 bg-white/20 rounded-full flex items-center justify-center font-bold">4</span>
-                    <p>Intervene early to prevent financial and emotional harm</p>
-                  </li>
-                </ol>
+              <div className="relative aspect-[4/3] rounded-lg overflow-hidden shadow-md">
+                <img 
+                  src="/images/landing/section-senior-man.jpg" 
+                  alt="Older adult using a tablet on a couch" 
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
               </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* How FamilyLink Works - Additional Info */}
+      <section className="py-12 bg-gradient-to-br from-[#F9EDE2] to-white">
+        <div className="container mx-auto px-4">
+          <div className="max-w-4xl mx-auto">
+            <div className="bg-gradient-to-br from-[#2C2347] to-[#C7A0A3] rounded-2xl p-8 text-white">
+              <h4 className="text-xl font-bold mb-4" style={{ fontFamily: "'Nunito', sans-serif" }}>
+                How FamilyLink™ Works
+              </h4>
+              <ol className="space-y-4">
+                <li className="flex gap-3">
+                  <span className="flex-shrink-0 w-8 h-8 bg-white/20 rounded-full flex items-center justify-center font-bold">1</span>
+                  <p>Add trusted family members as contacts</p>
+                </li>
+                <li className="flex gap-3">
+                  <span className="flex-shrink-0 w-8 h-8 bg-white/20 rounded-full flex items-center justify-center font-bold">2</span>
+                  <p>Set alert thresholds for concerning patterns</p>
+                </li>
+                <li className="flex gap-3">
+                  <span className="flex-shrink-0 w-8 h-8 bg-white/20 rounded-full flex items-center justify-center font-bold">3</span>
+                  <p>Receive instant notifications when risks are detected</p>
+                </li>
+                <li className="flex gap-3">
+                  <span className="flex-shrink-0 w-8 h-8 bg-white/20 rounded-full flex items-center justify-center font-bold">4</span>
+                  <p>Intervene early to prevent financial and emotional harm</p>
+                </li>
+              </ol>
             </div>
           </div>
         </div>
