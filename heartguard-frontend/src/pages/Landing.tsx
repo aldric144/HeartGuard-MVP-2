@@ -63,10 +63,10 @@ export function Landing() {
             {/* Left column - Text content */}
             <div className="text-center md:text-left">
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 animate-fade-in" style={{ fontFamily: "'Nunito', sans-serif" }}>
-                Your Heart. Protected by AI.
+                Don't Let Love Become a Lie.
               </h1>
               <p className="text-lg md:text-xl mb-8 text-white/90 animate-fade-in-delayed">
-                HeartGuard™ detects romance scams before they can trap you—using emotional intelligence, photo forensics, and real-time fraud detection.
+                HeartGuard™ reveals the truth behind any online relationship — detecting scams, fake profiles, emotional manipulation, and hidden danger within seconds.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start items-center animate-fade-in-delayed-2">
                 <Button 
@@ -75,21 +75,11 @@ export function Landing() {
                   className="bg-white text-[#2C2347] hover:bg-[#F9EDE2] text-lg px-8 py-6"
                   style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 700 }}
                 >
-                  <Download className="mr-2 h-5 w-5" />
-                  Download on the App Store
-                </Button>
-                <Button 
-                  size="lg"
-                  onClick={() => window.location.href = '/app'}
-                  variant="outline"
-                  className="bg-transparent border-2 border-white text-white hover:bg-white/10 text-lg px-8 py-6"
-                  style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 700 }}
-                >
-                  Get HeartGuard Now
+                  Start Your Free Safety Check
                 </Button>
               </div>
               <p className="mt-6 text-sm text-white/70 text-center md:text-left">
-                Coming soon to the App Store and Google Play
+                No judgment. No shame. 100% private.
               </p>
             </div>
 
