@@ -277,7 +277,17 @@ class PaymentInstruction(Base):
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./heartguard.db")
 
-engine = create_engine(DATABASE_URL)
+if DATABASE_URL.startswith("postgresql"):
+    engine = create_engine(
+        DATABASE_URL,
+        pool_size=20,
+        max_overflow=40,
+        pool_pre_ping=True,
+        pool_recycle=3600,
+    )
+else:
+    engine = create_engine(DATABASE_URL)
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_db():

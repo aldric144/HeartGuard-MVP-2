@@ -615,6 +615,10 @@ def calculate_trust_score(photo_analysis: Optional[PhotoAnalysisResponse],
 async def healthz():
     return {"status": "ok"}
 
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
 @app.post("/analyze/photo", response_model=PhotoAnalysisResponse)
 async def analyze_photo(file: UploadFile = File(...)):
     image_data = await file.read()

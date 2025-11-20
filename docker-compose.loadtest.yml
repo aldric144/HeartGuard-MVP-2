@@ -1,0 +1,132 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: heartguard-postgres-lt
+    environment:
+      POSTGRES_DB: heartguard_lt
+      POSTGRES_USER: heartguard_lt
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-heartguard_loadtest_2024}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data_lt:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U heartguard_lt"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: heartguard-minio-lt
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data_lt:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  minio-setup:
+    image: minio/mc:latest
+    container_name: heartguard-minio-setup-lt
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5;
+      /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin123;
+      /usr/bin/mc mb myminio/photos-lt --ignore-existing;
+      /usr/bin/mc mb myminio/pdfs-lt --ignore-existing;
+      /usr/bin/mc anonymous set download myminio/photos-lt;
+      /usr/bin/mc anonymous set download myminio/pdfs-lt;
+      exit 0;
+      "
+
+  api:
+    build:
+      context: ./heartguard-backend
+      dockerfile: Dockerfile.loadtest
+    container_name: heartguard-api-lt
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://heartguard_lt:${POSTGRES_PASSWORD:-heartguard_loadtest_2024}@postgres:5432/heartguard_lt
+      STORAGE_ENDPOINT: minio:9000
+      STORAGE_ACCESS_KEY: minioadmin
+      STORAGE_SECRET_KEY: minioadmin123
+      STORAGE_BUCKET_PHOTOS: photos-lt
+      STORAGE_BUCKET_PDFS: pdfs-lt
+      USE_EXTERNAL_APIS: "false"
+      MOCK_MODE: "true"
+      SECRET_KEY: loadtest_secret_key_2024
+      RAPIDAPI_KEY: mock_key
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./heartguard-backend/app:/app/app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: heartguard-prometheus-lt
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./loadtest/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data_lt:/prometheus
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: heartguard-grafana-lt
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ADMIN_USER: admin
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data_lt:/var/lib/grafana
+      - ./loadtest/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./loadtest/grafana/datasources:/etc/grafana/provisioning/datasources
+    depends_on:
+      - prometheus
+
+  k6:
+    image: grafana/k6:latest
+    container_name: heartguard-k6-lt
+    depends_on:
+      api:
+        condition: service_healthy
+    volumes:
+      - ./loadtest/k6:/scripts
+      - ./loadtest/fixtures:/fixtures
+      - ./loadtest/results:/results
+    environment:
+      K6_PROMETHEUS_RW_SERVER_URL: http://prometheus:9090/api/v1/write
+      API_BASE_URL: http://api:8000
+    command: ["sleep", "infinity"]
+
+volumes:
+  postgres_data_lt:
+  minio_data_lt:
+  prometheus_data_lt:
+  grafana_data_lt:

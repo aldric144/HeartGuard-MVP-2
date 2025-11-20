@@ -32,7 +32,8 @@ env/
 *.sqlite3
 
 # Environment variables
-.env.local
+.env
+.env.loadtest.local
 
 # IDEs
 .vscode/
