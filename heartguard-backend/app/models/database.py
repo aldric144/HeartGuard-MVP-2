@@ -436,7 +436,11 @@ def populate_safety_replies():
 def populate_geographic_risks():
     """Populate GeographicRisk table with comprehensive global romance fraud hotspot data.
     Uses upsert logic to allow safe updates and expansions."""
-    db = SessionLocal()
+    try:
+        db = SessionLocal()
+    except Exception as e:
+        print(f"Warning: Could not connect to database for geographic risks: {e}")
+        return
     
     risk_data = [
         {
@@ -811,17 +815,27 @@ def populate_geographic_risks():
         },
     ]
     
-    for entry in risk_data:
-        existing = db.query(GeographicRisk).filter(GeographicRisk.code == entry["code"]).first()
-        if existing:
-            existing.region = entry["region"]
-            existing.risk_level = entry["risk_level"]
-            existing.scam_types = entry.get("scam_types")
-            existing.notes = entry.get("notes")
-            existing.category = entry.get("category")
-        else:
-            risk = GeographicRisk(**entry)
-            db.add(risk)
-    
-    db.commit()
-    db.close()
+    try:
+        for entry in risk_data:
+            try:
+                existing = db.query(GeographicRisk).filter(GeographicRisk.code == entry["code"]).first()
+                if existing:
+                    existing.region = entry["region"]
+                    existing.risk_level = entry["risk_level"]
+                    existing.scam_types = entry.get("scam_types")
+                    existing.notes = entry.get("notes")
+                    existing.category = entry.get("category")
+                else:
+                    risk = GeographicRisk(**entry)
+                    db.add(risk)
+                db.commit()
+            except Exception as inner_e:
+                db.rollback()
+                continue
+        
+        print(f"✅ Populated geographic risk entries")
+    except Exception as e:
+        db.rollback()
+        print(f"⚠️ Error populating geographic risks: {e}")
+    finally:
+        db.close()
