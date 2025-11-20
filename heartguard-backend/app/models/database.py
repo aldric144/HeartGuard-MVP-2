@@ -298,7 +298,11 @@ def get_db():
         db.close()
 
 def init_db():
-    Base.metadata.create_all(bind=engine)
+    try:
+        Base.metadata.create_all(bind=engine, checkfirst=True)
+    except Exception as e:
+        print(f"Warning during database initialization: {e}")
+        pass
     
     from sqlalchemy import inspect, text
     inspector = inspect(engine)
