@@ -19,13 +19,9 @@ export default function () {
   
   response = http.post(
     `${API_BASE_URL}/auth/register`,
-    JSON.stringify({
-      email: user.email,
-      password: user.password,
-      name: user.name,
-    }),
+    `email=${encodeURIComponent(user.email)}&password=${encodeURIComponent(user.password)}`,
     {
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       ...tagRequest('register'),
     }
   );
@@ -35,12 +31,9 @@ export default function () {
   
   response = http.post(
     `${API_BASE_URL}/auth/login`,
-    JSON.stringify({
-      email: user.email,
-      password: user.password,
-    }),
+    `email=${encodeURIComponent(user.email)}&password=${encodeURIComponent(user.password)}`,
     {
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       ...tagRequest('login'),
     }
   );
