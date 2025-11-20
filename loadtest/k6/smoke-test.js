@@ -77,30 +77,6 @@ export default function () {
   
   randomSleep(1, 2);
   
-  response = http.get(`${API_BASE_URL}/subscription/tiers`, tagRequest('subscription_tiers'));
-  checkResponse(response, 'subscription_tiers', 200);
-  
-  randomSleep(1, 2);
-  
-  if (sessionToken) {
-    response = http.get(
-      `${API_BASE_URL}/usage/status`,
-      {
-        headers: { 'Authorization': `Bearer ${sessionToken}` },
-        ...tagRequest('usage_status'),
-      }
-    );
-    checkResponse(response, 'usage_status', 200);
-  }
-  
-  randomSleep(1, 2);
-  
-  response = http.get(
-    `${API_BASE_URL}/safety/replies?risk_level=high`,
-    tagRequest('safety_replies')
-  );
-  checkResponse(response, 'safety_replies', 200);
-  
   randomSleep(1, 2);
   
   response = http.get(`${API_BASE_URL}/community/stats`, tagRequest('community_stats'));
