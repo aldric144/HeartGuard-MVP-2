@@ -4,8 +4,6 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Dict, Optional
 from sqlalchemy.orm import Session
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 import base64
 import hashlib
 import re
@@ -17,8 +15,6 @@ import uuid
 from dotenv import load_dotenv
 import os
 import httpx
-import asyncio
-import time
 
 from app.models.database import (
     Base, engine, get_db, init_db,
@@ -35,37 +31,11 @@ from app.models.database import (
     PaymentInstruction as DBPaymentInstruction,
     populate_geographic_risks
 )
-
-try:
-    from app.models.database_async import (
-        get_async_db, init_async_db,
-        populate_safety_replies_async, populate_geographic_risks_async
-    )
-    ASYNC_DB_AVAILABLE = True
-except ImportError:
-    ASYNC_DB_AVAILABLE = False
-    print("⚠️ Async database not available, using sync fallback")
-
 from app.toneshift_engine import toneshift_engine
 from app.evidence_locker import generate_evidence_pdf
 from app.alerting import check_and_trigger_alerts
 from app.safety_nudges import generate_safety_nudges, get_safepay_checklist
 from app.usage_tracking import get_or_create_user, check_usage_limit, increment_usage, get_tier_features
-
-try:
-    from app.rate_limiter import setup_rate_limiting, limiter
-    RATE_LIMITING_AVAILABLE = True
-except ImportError:
-    RATE_LIMITING_AVAILABLE = False
-    print("⚠️ Rate limiting not available")
-
-try:
-    from app.logging_config import RequestLoggingMiddleware, log_db_query
-    LOGGING_AVAILABLE = True
-except ImportError:
-    LOGGING_AVAILABLE = False
-    print("⚠️ Structured logging not available")
-
 import re
 
 load_dotenv()
@@ -78,14 +48,6 @@ TRUST_SCORE_WEIGHTS = {
 }
 
 app = FastAPI()
-
-if LOGGING_AVAILABLE:
-    app.add_middleware(RequestLoggingMiddleware)
-    print("✅ Request logging middleware enabled")
-
-if RATE_LIMITING_AVAILABLE:
-    setup_rate_limiting(app)
-    print("✅ Rate limiting enabled")
 
 def normalize_phone_number(phone_input: str) -> str:
     """Normalize phone number to standard format for matching.
@@ -127,20 +89,10 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize database with async support if available"""
     from app.models.database import populate_safety_replies
-    
     init_db()
     populate_geographic_risks()
     populate_safety_replies()
-    
-    if ASYNC_DB_AVAILABLE:
-        await init_async_db()
-        await populate_geographic_risks_async()
-        await populate_safety_replies_async()
-        print("✅ Async database initialized")
-    
-    print("✅ HeartGuard backend started")
 
 class ChatAnalysisRequest(BaseModel):
     messages: List[str]
@@ -668,26 +620,17 @@ async def health():
     return {"status": "ok"}
 
 @app.post("/analyze/photo", response_model=PhotoAnalysisResponse)
-async def analyze_photo(request: Request, file: UploadFile = File(...)):
-    """Analyze photo for authenticity (OPTIMIZED for high concurrency)"""
-    start_time = time.time()
-    
+async def analyze_photo(file: UploadFile = File(...)):
     image_data = await file.read()
     filename = file.filename or ""
     
     image_hash = hashlib.md5(image_data).hexdigest()
     
-    reverse_matches, duplication_score = await asyncio.to_thread(
-        simulate_reverse_image_search, image_hash, filename
-    )
+    reverse_matches, duplication_score = simulate_reverse_image_search(image_hash, filename)
     
-    metadata_integrity_score, metadata_issues = await asyncio.to_thread(
-        calculate_metadata_integrity_score, image_data
-    )
+    metadata_integrity_score, metadata_issues = calculate_metadata_integrity_score(image_data)
     
-    deepfake_confidence, _ = await asyncio.to_thread(
-        detect_deepfake, image_data
-    )
+    deepfake_confidence, _ = detect_deepfake(image_data)
     
     final_photo_score = int((duplication_score * 0.6) + (metadata_integrity_score * 0.4))
     
@@ -697,10 +640,6 @@ async def analyze_photo(request: Request, file: UploadFile = File(...)):
         risk_level = "Medium"
     else:
         risk_level = "Low"
-    
-    if LOGGING_AVAILABLE:
-        duration_ms = (time.time() - start_time) * 1000
-        log_db_query("analyze_photo", duration_ms, True)
     
     return PhotoAnalysisResponse(
         image_hash=image_hash,
@@ -714,18 +653,14 @@ async def analyze_photo(request: Request, file: UploadFile = File(...)):
     )
 
 @app.post("/analyze/chat", response_model=ChatAnalysisResponse)
-async def analyze_chat(http_request: Request, request: ChatAnalysisRequest):
+async def analyze_chat(request: ChatAnalysisRequest):
     """
-    Production-ready ToneShift™ NLP Engine endpoint (OPTIMIZED for high concurrency)
+    Production-ready ToneShift™ NLP Engine endpoint
     Uses DistilBERT for sentiment analysis and manipulation pattern detection
     """
-    start_time = time.time()
-    
     messages = [{"sender": "user", "text": msg} for msg in request.messages]
     
-    analysis = await asyncio.to_thread(
-        toneshift_engine.analyze_conversation, messages
-    )
+    analysis = toneshift_engine.analyze_conversation(messages)
     
     manipulation_patterns = [
         ManipulationPattern(
@@ -737,10 +672,6 @@ async def analyze_chat(http_request: Request, request: ChatAnalysisRequest):
         for p in analysis["manipulation_patterns"]
     ]
     
-    if LOGGING_AVAILABLE:
-        duration_ms = (time.time() - start_time) * 1000
-        log_db_query("analyze_chat", duration_ms, True)
-    
     return ChatAnalysisResponse(
         sentiment_drift=analysis["sentiment_drift"],
         manipulation_patterns=manipulation_patterns,
@@ -750,78 +681,54 @@ async def analyze_chat(http_request: Request, request: ChatAnalysisRequest):
 
 @app.post("/analyze/metadata", response_model=MetadataAnalysisResponse)
 async def analyze_metadata(
-    request: Request,
     profile_id: str = Form(...), 
     phone_number: Optional[str] = Form(None),
     db: Session = Depends(get_db)
 ):
     """
-    Metadata Integrity Engine endpoint (OPTIMIZED for high concurrency)
+    Metadata Integrity Engine endpoint
     Analyzes profile age, consistency, and location risk to detect suspicious accounts
     """
-    start_time = time.time()
+    profile_age_days, profile_age_score = simulate_profile_age_check(profile_id)
+    consistency_score, consistency_issues = simulate_consistency_check(profile_id)
     
-    try:
-        profile_age_days, profile_age_score = await asyncio.to_thread(
-            simulate_profile_age_check, profile_id
-        )
-        consistency_score, consistency_issues = await asyncio.to_thread(
-            simulate_consistency_check, profile_id
-        )
+    location_risk_score = 100
+    location_risk_rationale = None
+    is_known_scam_origin = False
+    
+    if phone_number:
+        normalized_phone = normalize_phone_number(phone_number)
+        all_risks = db.query(GeographicRisk).all()
+        all_risks_sorted = sorted(all_risks, key=lambda r: len(r.code), reverse=True)
         
-        location_risk_score = 100
-        location_risk_rationale = None
-        is_known_scam_origin = False
+        matched_risk = None
+        for risk in all_risks_sorted:
+            if normalized_phone.startswith(risk.code):
+                matched_risk = risk
+                break
         
-        if phone_number:
-            normalized_phone = normalize_phone_number(phone_number)
-            
-            if ASYNC_DB_AVAILABLE and hasattr(request.state, 'async_db'):
-                async_db = request.state.async_db
-                result = await async_db.execute(select(GeographicRisk))
-                all_risks = result.scalars().all()
-            else:
-                all_risks = await asyncio.to_thread(lambda: db.query(GeographicRisk).all())
-            
-            all_risks_sorted = sorted(all_risks, key=lambda r: len(r.code), reverse=True)
-            
-            matched_risk = None
-            for risk in all_risks_sorted:
-                if normalized_phone.startswith(risk.code):
-                    matched_risk = risk
-                    break
-            
-            if matched_risk:
-                risk_score_map = {
-                    "Extreme": 10,
-                    "High": 30,
-                    "Medium": 60
-                }
-                location_risk_score = risk_score_map.get(matched_risk.risk_level, 50)
-                location_risk_rationale = f"Code {matched_risk.code} ({matched_risk.region}) is a {matched_risk.risk_level} risk origin for romance fraud"
-                is_known_scam_origin = True
-        
-        final_metadata_score = int((profile_age_score + consistency_score + location_risk_score) / 3)
-        
-        if LOGGING_AVAILABLE:
-            duration_ms = (time.time() - start_time) * 1000
-            log_db_query("analyze_metadata", duration_ms, True)
-        
-        return MetadataAnalysisResponse(
-            profile_age_score=profile_age_score,
-            consistency_score=consistency_score,
-            location_risk_score=location_risk_score,
-            final_metadata_score=final_metadata_score,
-            profile_age_days=profile_age_days,
-            consistency_issues=consistency_issues,
-            location_risk_rationale=location_risk_rationale,
-            is_known_scam_origin=is_known_scam_origin
-        )
-    except Exception as e:
-        if LOGGING_AVAILABLE:
-            duration_ms = (time.time() - start_time) * 1000
-            log_db_query("analyze_metadata", duration_ms, False)
-        raise HTTPException(status_code=500, detail=f"Metadata analysis failed: {str(e)}")
+        if matched_risk:
+            risk_score_map = {
+                "Extreme": 10,
+                "High": 30,
+                "Medium": 60
+            }
+            location_risk_score = risk_score_map.get(matched_risk.risk_level, 50)
+            location_risk_rationale = f"Code {matched_risk.code} ({matched_risk.region}) is a {matched_risk.risk_level} risk origin for romance fraud"
+            is_known_scam_origin = True
+    
+    final_metadata_score = int((profile_age_score + consistency_score + location_risk_score) / 3)
+    
+    return MetadataAnalysisResponse(
+        profile_age_score=profile_age_score,
+        consistency_score=consistency_score,
+        location_risk_score=location_risk_score,
+        final_metadata_score=final_metadata_score,
+        profile_age_days=profile_age_days,
+        consistency_issues=consistency_issues,
+        location_risk_rationale=location_risk_rationale,
+        is_known_scam_origin=is_known_scam_origin
+    )
 
 @app.post("/trustscore/generate", response_model=TrustScoreReport)
 async def generate_trust_score(
@@ -1889,59 +1796,25 @@ async def get_subscription_tiers():
     ]}
 
 @app.post("/auth/register")
-async def register_user(request: Request, email: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
-    """Register a new user with email and password (OPTIMIZED for high concurrency)."""
+async def register_user(email: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
+    """Register a new user with email and password."""
     from app.auth import create_user, create_session
-    start_time = time.time()
-    
     try:
-        user = await asyncio.to_thread(create_user, db, email, password)
-        session_token = await asyncio.to_thread(create_session, user.id, user.email)
-        
-        if LOGGING_AVAILABLE:
-            duration_ms = (time.time() - start_time) * 1000
-            log_db_query("register_user", duration_ms, True)
-        
+        user = create_user(db, email, password)
+        session_token = create_session(user.id, user.email)
         return {"success": True, "user_id": user.id, "email": user.email, "session_token": session_token}
     except ValueError as e:
-        if LOGGING_AVAILABLE:
-            duration_ms = (time.time() - start_time) * 1000
-            log_db_query("register_user", duration_ms, False)
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        if LOGGING_AVAILABLE:
-            duration_ms = (time.time() - start_time) * 1000
-            log_db_query("register_user", duration_ms, False)
-        raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
 @app.post("/auth/login")
-async def login_user(request: Request, email: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
-    """Login with email and password (OPTIMIZED for high concurrency)."""
+async def login_user(email: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
+    """Login with email and password."""
     from app.auth import authenticate_user, create_session
-    start_time = time.time()
-    
-    try:
-        user = await asyncio.to_thread(authenticate_user, db, email, password)
-        if not user:
-            if LOGGING_AVAILABLE:
-                duration_ms = (time.time() - start_time) * 1000
-                log_db_query("login_user", duration_ms, False)
-            raise HTTPException(status_code=401, detail="Invalid email or password")
-        
-        session_token = await asyncio.to_thread(create_session, user.id, user.email)
-        
-        if LOGGING_AVAILABLE:
-            duration_ms = (time.time() - start_time) * 1000
-            log_db_query("login_user", duration_ms, True)
-        
-        return {"success": True, "user_id": user.id, "email": user.email, "session_token": session_token}
-    except HTTPException:
-        raise
-    except Exception as e:
-        if LOGGING_AVAILABLE:
-            duration_ms = (time.time() - start_time) * 1000
-            log_db_query("login_user", duration_ms, False)
-        raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")
+    user = authenticate_user(db, email, password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    session_token = create_session(user.id, user.email)
+    return {"success": True, "user_id": user.id, "email": user.email, "session_token": session_token}
 
 @app.post("/auth/magic-link")
 async def request_magic_link(email: str = Form(...), db: Session = Depends(get_db)):
