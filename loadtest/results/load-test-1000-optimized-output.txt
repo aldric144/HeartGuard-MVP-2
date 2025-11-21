@@ -2411,3 +2411,333 @@ load_1000   [  34% ] 1117/1191 VUs  12m47.4s/38m0s  1000.00 iters/s
 
 running (12m47.9s), 1123/1191 VUs, 595514 complete and 0 interrupted iterations
 load_1000   [  34% ] 1123/1191 VUs  12m47.9s/38m0s  1000.00 iters/s
+
+running (12m48.9s), 1139/1191 VUs, 596498 complete and 0 interrupted iterations
+load_1000   [  34% ] 1139/1191 VUs  12m48.9s/38m0s  1000.00 iters/s
+
+running (12m49.9s), 1146/1191 VUs, 597491 complete and 0 interrupted iterations
+load_1000   [  34% ] 1146/1191 VUs  12m49.9s/38m0s  1000.00 iters/s
+
+running (12m50.9s), 1115/1191 VUs, 598523 complete and 0 interrupted iterations
+load_1000   [  34% ] 1115/1191 VUs  12m50.9s/38m0s  1000.00 iters/s
+time="2025-11-21T05:07:19Z" level=warning msg="Request Failed" error="Post \"http://api:8000/analyze/photo\": EOF"
+
+running (12m51.9s), 1126/1191 VUs, 599511 complete and 0 interrupted iterations
+load_1000   [  34% ] 1126/1191 VUs  12m51.9s/38m0s  1000.00 iters/s
+
+running (12m52.9s), 1150/1191 VUs, 600488 complete and 0 interrupted iterations
+load_1000   [  34% ] 1150/1191 VUs  12m52.9s/38m0s  1000.00 iters/s
+
+running (12m53.9s), 1122/1191 VUs, 601515 complete and 0 interrupted iterations
+load_1000   [  34% ] 1122/1191 VUs  12m53.9s/38m0s  1000.00 iters/s
+
+running (12m54.9s), 1135/1191 VUs, 602502 complete and 0 interrupted iterations
+load_1000   [  34% ] 1135/1191 VUs  12m54.9s/38m0s  1000.00 iters/s
+
+running (12m55.9s), 1122/1191 VUs, 603516 complete and 0 interrupted iterations
+load_1000   [  34% ] 1122/1191 VUs  12m55.9s/38m0s  1000.00 iters/s
+
+running (12m56.9s), 1107/1191 VUs, 604530 complete and 0 interrupted iterations
+load_1000   [  34% ] 1108/1191 VUs  12m56.9s/38m0s  1000.00 iters/s
+
+running (12m57.9s), 1132/1191 VUs, 605505 complete and 0 interrupted iterations
+load_1000   [  34% ] 1132/1191 VUs  12m57.9s/38m0s  1000.00 iters/s
+
+running (12m58.9s), 1106/1191 VUs, 606532 complete and 0 interrupted iterations
+load_1000   [  34% ] 1106/1191 VUs  12m58.9s/38m0s  1000.00 iters/s
+
+running (12m59.9s), 1124/1191 VUs, 607513 complete and 0 interrupted iterations
+load_1000   [  34% ] 1124/1191 VUs  12m59.9s/38m0s  1000.00 iters/s
+
+running (13m00.9s), 1144/1191 VUs, 608494 complete and 0 interrupted iterations
+load_1000   [  34% ] 1144/1191 VUs  13m00.9s/38m0s  1000.00 iters/s
+
+running (13m01.9s), 1130/1191 VUs, 609508 complete and 0 interrupted iterations
+load_1000   [  34% ] 1130/1191 VUs  13m01.9s/38m0s  1000.00 iters/s
+
+running (13m02.9s), 1091/1191 VUs, 610546 complete and 0 interrupted iterations
+load_1000   [  34% ] 1091/1191 VUs  13m02.9s/38m0s  1000.00 iters/s
+
+running (13m03.9s), 1118/1191 VUs, 611520 complete and 0 interrupted iterations
+load_1000   [  34% ] 1118/1191 VUs  13m03.9s/38m0s  1000.00 iters/s
+
+running (13m04.9s), 1115/1191 VUs, 612523 complete and 0 interrupted iterations
+load_1000   [  34% ] 1115/1191 VUs  13m04.9s/38m0s  1000.00 iters/s
+
+running (13m05.9s), 1148/1191 VUs, 613489 complete and 0 interrupted iterations
+load_1000   [  34% ] 1148/1191 VUs  13m05.9s/38m0s  1000.00 iters/s
+
+running (13m06.9s), 1133/1191 VUs, 614505 complete and 0 interrupted iterations
+load_1000   [  35% ] 1133/1191 VUs  13m06.9s/38m0s  1000.00 iters/s
+
+running (13m07.9s), 1124/1191 VUs, 615514 complete and 0 interrupted iterations
+load_1000   [  35% ] 1124/1191 VUs  13m07.9s/38m0s  1000.00 iters/s
+
+running (13m08.9s), 1127/1191 VUs, 616511 complete and 0 interrupted iterations
+load_1000   [  35% ] 1127/1191 VUs  13m08.9s/38m0s  1000.00 iters/s
+
+running (13m09.9s), 1112/1191 VUs, 617525 complete and 0 interrupted iterations
+load_1000   [  35% ] 1112/1191 VUs  13m09.9s/38m0s  1000.00 iters/s
+
+running (13m10.9s), 1143/1191 VUs, 618495 complete and 0 interrupted iterations
+load_1000   [  35% ] 1143/1191 VUs  13m10.9s/38m0s  1000.00 iters/s
+
+running (13m11.9s), 1151/1191 VUs, 619487 complete and 0 interrupted iterations
+load_1000   [  35% ] 1151/1191 VUs  13m11.9s/38m0s  1000.00 iters/s
+
+running (13m12.9s), 1138/1191 VUs, 620499 complete and 0 interrupted iterations
+load_1000   [  35% ] 1138/1191 VUs  13m12.9s/38m0s  1000.00 iters/s
+
+running (13m13.9s), 1102/1191 VUs, 621536 complete and 0 interrupted iterations
+load_1000   [  35% ] 1102/1191 VUs  13m13.9s/38m0s  1000.00 iters/s
+
+running (13m14.9s), 1109/1191 VUs, 622528 complete and 0 interrupted iterations
+load_1000   [  35% ] 1109/1191 VUs  13m14.9s/38m0s  1000.00 iters/s
+
+running (13m15.9s), 1133/1191 VUs, 623504 complete and 0 interrupted iterations
+load_1000   [  35% ] 1133/1191 VUs  13m15.9s/38m0s  1000.00 iters/s
+
+running (13m16.9s), 1121/1191 VUs, 624516 complete and 0 interrupted iterations
+load_1000   [  35% ] 1121/1191 VUs  13m16.9s/38m0s  1000.00 iters/s
+
+running (13m17.9s), 1110/1191 VUs, 625527 complete and 0 interrupted iterations
+load_1000   [  35% ] 1110/1191 VUs  13m17.9s/38m0s  1000.00 iters/s
+
+running (13m18.9s), 1124/1191 VUs, 626513 complete and 0 interrupted iterations
+load_1000   [  35% ] 1124/1191 VUs  13m18.9s/38m0s  1000.00 iters/s
+
+running (13m19.9s), 1115/1191 VUs, 627522 complete and 0 interrupted iterations
+load_1000   [  35% ] 1115/1191 VUs  13m19.9s/38m0s  1000.00 iters/s
+
+running (13m20.9s), 1110/1191 VUs, 628528 complete and 0 interrupted iterations
+load_1000   [  35% ] 1110/1191 VUs  13m20.9s/38m0s  1000.00 iters/s
+
+running (13m21.9s), 1133/1191 VUs, 629504 complete and 0 interrupted iterations
+load_1000   [  35% ] 1133/1191 VUs  13m21.9s/38m0s  1000.00 iters/s
+
+running (13m22.9s), 1097/1191 VUs, 630540 complete and 0 interrupted iterations
+load_1000   [  35% ] 1097/1191 VUs  13m22.9s/38m0s  1000.00 iters/s
+
+running (13m23.9s), 1116/1191 VUs, 631521 complete and 0 interrupted iterations
+load_1000   [  35% ] 1116/1191 VUs  13m23.9s/38m0s  1000.00 iters/s
+
+running (13m24.9s), 1114/1191 VUs, 632522 complete and 0 interrupted iterations
+load_1000   [  35% ] 1114/1191 VUs  13m24.9s/38m0s  1000.00 iters/s
+
+running (13m25.9s), 1117/1191 VUs, 633521 complete and 0 interrupted iterations
+load_1000   [  35% ] 1117/1191 VUs  13m25.9s/38m0s  1000.00 iters/s
+
+running (13m26.9s), 1139/1191 VUs, 634498 complete and 0 interrupted iterations
+load_1000   [  35% ] 1139/1191 VUs  13m26.9s/38m0s  1000.00 iters/s
+
+running (13m27.9s), 1124/1191 VUs, 635513 complete and 0 interrupted iterations
+load_1000   [  35% ] 1124/1191 VUs  13m27.9s/38m0s  1000.00 iters/s
+
+running (13m28.9s), 1113/1191 VUs, 636525 complete and 0 interrupted iterations
+load_1000   [  35% ] 1113/1191 VUs  13m28.9s/38m0s  1000.00 iters/s
+
+running (13m29.9s), 1124/1191 VUs, 637514 complete and 0 interrupted iterations
+load_1000   [  36% ] 1124/1191 VUs  13m29.9s/38m0s  1000.00 iters/s
+
+running (13m30.9s), 1107/1191 VUs, 638531 complete and 0 interrupted iterations
+load_1000   [  36% ] 1107/1191 VUs  13m30.9s/38m0s  1000.00 iters/s
+time="2025-11-21T05:07:59Z" level=warning msg="Request Failed" error="Post \"http://api:8000/auth/register\": read tcp 172.18.0.5:44604->172.18.0.4:8000: read: connection reset by peer"
+
+running (13m31.9s), 1098/1191 VUs, 639539 complete and 0 interrupted iterations
+load_1000   [  36% ] 1098/1191 VUs  13m31.9s/38m0s  1000.00 iters/s
+
+running (13m32.9s), 1106/1191 VUs, 640532 complete and 0 interrupted iterations
+load_1000   [  36% ] 1105/1191 VUs  13m32.9s/38m0s  1000.00 iters/s
+
+running (13m33.9s), 1127/1191 VUs, 641511 complete and 0 interrupted iterations
+load_1000   [  36% ] 1127/1191 VUs  13m33.9s/38m0s  1000.00 iters/s
+
+running (13m34.9s), 1155/1191 VUs, 642483 complete and 0 interrupted iterations
+load_1000   [  36% ] 1155/1191 VUs  13m34.9s/38m0s  1000.00 iters/s
+
+running (13m35.9s), 1131/1191 VUs, 643506 complete and 0 interrupted iterations
+load_1000   [  36% ] 1131/1191 VUs  13m35.9s/38m0s  1000.00 iters/s
+
+running (13m36.9s), 1122/1191 VUs, 644515 complete and 0 interrupted iterations
+load_1000   [  36% ] 1122/1191 VUs  13m36.9s/38m0s  1000.00 iters/s
+
+running (13m37.9s), 1145/1191 VUs, 645493 complete and 0 interrupted iterations
+load_1000   [  36% ] 1145/1191 VUs  13m37.9s/38m0s  1000.00 iters/s
+
+running (13m38.9s), 1142/1191 VUs, 646496 complete and 0 interrupted iterations
+load_1000   [  36% ] 1142/1191 VUs  13m38.9s/38m0s  1000.00 iters/s
+
+running (13m39.9s), 1138/1191 VUs, 647499 complete and 0 interrupted iterations
+load_1000   [  36% ] 1138/1191 VUs  13m39.9s/38m0s  1000.00 iters/s
+
+running (13m40.9s), 1128/1191 VUs, 648510 complete and 0 interrupted iterations
+load_1000   [  36% ] 1128/1191 VUs  13m40.9s/38m0s  1000.00 iters/s
+time="2025-11-21T05:08:09Z" level=warning msg="Request Failed" error="Post \"http://api:8000/analyze/metadata\": http: server closed idle connection"
+
+running (13m41.9s), 1134/1191 VUs, 649504 complete and 0 interrupted iterations
+load_1000   [  36% ] 1134/1191 VUs  13m41.9s/38m0s  1000.00 iters/s
+
+running (13m42.9s), 1120/1191 VUs, 650518 complete and 0 interrupted iterations
+load_1000   [  36% ] 1120/1191 VUs  13m42.9s/38m0s  1000.00 iters/s
+
+running (13m43.9s), 1125/1191 VUs, 651512 complete and 0 interrupted iterations
+load_1000   [  36% ] 1125/1191 VUs  13m43.9s/38m0s  1000.00 iters/s
+
+running (13m44.9s), 1113/1191 VUs, 652524 complete and 0 interrupted iterations
+load_1000   [  36% ] 1113/1191 VUs  13m44.9s/38m0s  1000.00 iters/s
+
+running (13m45.9s), 1126/1191 VUs, 653511 complete and 0 interrupted iterations
+load_1000   [  36% ] 1126/1191 VUs  13m45.9s/38m0s  1000.00 iters/s
+
+running (13m46.9s), 1136/1191 VUs, 654501 complete and 0 interrupted iterations
+load_1000   [  36% ] 1136/1191 VUs  13m46.9s/38m0s  1000.00 iters/s
+
+running (13m47.9s), 1141/1191 VUs, 655496 complete and 0 interrupted iterations
+load_1000   [  36% ] 1141/1191 VUs  13m47.9s/38m0s  1000.00 iters/s
+
+running (13m48.9s), 1119/1191 VUs, 656519 complete and 0 interrupted iterations
+load_1000   [  36% ] 1119/1191 VUs  13m48.9s/38m0s  1000.00 iters/s
+
+running (13m49.9s), 1123/1191 VUs, 657514 complete and 0 interrupted iterations
+load_1000   [  36% ] 1123/1191 VUs  13m49.9s/38m0s  1000.00 iters/s
+time="2025-11-21T05:08:18Z" level=warning msg="Request Failed" error="Post \"http://api:8000/analyze/metadata\": read tcp 172.18.0.5:57660->172.18.0.4:8000: read: connection reset by peer"
+time="2025-11-21T05:08:18Z" level=warning msg="Request Failed" error="Post \"http://api:8000/auth/register\": read tcp 172.18.0.5:53088->172.18.0.4:8000: read: connection reset by peer"
+
+running (13m50.9s), 1120/1191 VUs, 658517 complete and 0 interrupted iterations
+load_1000   [  36% ] 1120/1191 VUs  13m50.9s/38m0s  1000.00 iters/s
+
+running (13m51.9s), 1104/1191 VUs, 659532 complete and 0 interrupted iterations
+load_1000   [  36% ] 1104/1191 VUs  13m51.9s/38m0s  1000.00 iters/s
+
+running (13m52.9s), 1136/1191 VUs, 660501 complete and 0 interrupted iterations
+load_1000   [  37% ] 1136/1191 VUs  13m52.9s/38m0s  1000.00 iters/s
+
+running (13m53.9s), 1157/1191 VUs, 661480 complete and 0 interrupted iterations
+load_1000   [  37% ] 1157/1191 VUs  13m53.9s/38m0s  1000.00 iters/s
+
+running (13m54.9s), 1140/1191 VUs, 662498 complete and 0 interrupted iterations
+load_1000   [  37% ] 1140/1191 VUs  13m54.9s/38m0s  1000.00 iters/s
+
+running (13m55.9s), 1096/1191 VUs, 663542 complete and 0 interrupted iterations
+load_1000   [  37% ] 1096/1191 VUs  13m55.9s/38m0s  1000.00 iters/s
+
+running (13m56.9s), 1131/1191 VUs, 664506 complete and 0 interrupted iterations
+load_1000   [  37% ] 1131/1191 VUs  13m56.9s/38m0s  1000.00 iters/s
+
+running (13m57.9s), 1148/1191 VUs, 665490 complete and 0 interrupted iterations
+load_1000   [  37% ] 1148/1191 VUs  13m57.9s/38m0s  1000.00 iters/s
+
+running (13m58.9s), 1145/1191 VUs, 666493 complete and 0 interrupted iterations
+load_1000   [  37% ] 1145/1191 VUs  13m58.9s/38m0s  1000.00 iters/s
+
+running (13m59.9s), 1128/1191 VUs, 667510 complete and 0 interrupted iterations
+load_1000   [  37% ] 1128/1191 VUs  13m59.9s/38m0s  1000.00 iters/s
+time="2025-11-21T05:08:27Z" level=warning msg="Request Failed" error="Post \"http://api:8000/analyze/photo\": read tcp 172.18.0.5:39040->172.18.0.4:8000: read: connection reset by peer"
+
+running (14m00.9s), 1110/1191 VUs, 668528 complete and 0 interrupted iterations
+load_1000   [  37% ] 1110/1191 VUs  14m00.9s/38m0s  1000.00 iters/s
+time="2025-11-21T05:08:29Z" level=warning msg="Request Failed" error="Post \"http://api:8000/analyze/photo\": EOF"
+
+running (14m01.9s), 1127/1191 VUs, 669511 complete and 0 interrupted iterations
+load_1000   [  37% ] 1127/1191 VUs  14m01.9s/38m0s  1000.00 iters/s
+
+running (14m02.9s), 1119/1191 VUs, 670519 complete and 0 interrupted iterations
+load_1000   [  37% ] 1119/1191 VUs  14m02.9s/38m0s  1000.00 iters/s
+
+running (14m03.9s), 1124/1191 VUs, 671514 complete and 0 interrupted iterations
+load_1000   [  37% ] 1124/1191 VUs  14m03.9s/38m0s  1000.00 iters/s
+time="2025-11-21T05:08:31Z" level=warning msg="Request Failed" error="Post \"http://api:8000/auth/register\": read tcp 172.18.0.5:46052->172.18.0.4:8000: read: connection reset by peer"
+
+running (14m04.9s), 1139/1191 VUs, 672498 complete and 0 interrupted iterations
+load_1000   [  37% ] 1139/1191 VUs  14m04.9s/38m0s  1000.00 iters/s
+
+running (14m05.9s), 1116/1191 VUs, 673522 complete and 0 interrupted iterations
+load_1000   [  37% ] 1116/1191 VUs  14m05.9s/38m0s  1000.00 iters/s
+
+running (14m06.9s), 1144/1191 VUs, 674494 complete and 0 interrupted iterations
+load_1000   [  37% ] 1144/1191 VUs  14m06.9s/38m0s  1000.00 iters/s
+
+running (14m07.9s), 1130/1191 VUs, 675507 complete and 0 interrupted iterations
+load_1000   [  37% ] 1130/1191 VUs  14m07.9s/38m0s  1000.00 iters/s
+
+running (14m08.9s), 1148/1191 VUs, 676489 complete and 0 interrupted iterations
+load_1000   [  37% ] 1148/1191 VUs  14m08.9s/38m0s  1000.00 iters/s
+time="2025-11-21T05:08:36Z" level=warning msg="Request Failed" error="Post \"http://api:8000/analyze/chat\": EOF"
+
+running (14m09.9s), 1102/1191 VUs, 677536 complete and 0 interrupted iterations
+load_1000   [  37% ] 1102/1191 VUs  14m09.9s/38m0s  1000.00 iters/s
+
+running (14m10.9s), 1152/1191 VUs, 678485 complete and 0 interrupted iterations
+load_1000   [  37% ] 1152/1191 VUs  14m10.9s/38m0s  1000.00 iters/s
+
+running (14m11.9s), 1122/1191 VUs, 679515 complete and 0 interrupted iterations
+load_1000   [  37% ] 1122/1191 VUs  14m11.9s/38m0s  1000.00 iters/s
+
+running (14m12.9s), 1100/1191 VUs, 680537 complete and 0 interrupted iterations
+load_1000   [  37% ] 1100/1191 VUs  14m12.9s/38m0s  1000.00 iters/s
+
+running (14m13.9s), 1121/1191 VUs, 681517 complete and 0 interrupted iterations
+load_1000   [  37% ] 1121/1191 VUs  14m13.9s/38m0s  1000.00 iters/s
+
+running (14m14.9s), 1135/1191 VUs, 682502 complete and 0 interrupted iterations
+load_1000   [  37% ] 1135/1191 VUs  14m14.9s/38m0s  1000.00 iters/s
+
+running (14m15.9s), 1147/1191 VUs, 683491 complete and 0 interrupted iterations
+load_1000   [  38% ] 1147/1191 VUs  14m15.9s/38m0s  1000.00 iters/s
+
+running (14m16.9s), 1122/1191 VUs, 684515 complete and 0 interrupted iterations
+load_1000   [  38% ] 1122/1191 VUs  14m16.9s/38m0s  1000.00 iters/s
+
+running (14m17.9s), 1122/1191 VUs, 685516 complete and 0 interrupted iterations
+load_1000   [  38% ] 1122/1191 VUs  14m17.9s/38m0s  1000.00 iters/s
+
+running (14m18.9s), 1115/1191 VUs, 686523 complete and 0 interrupted iterations
+load_1000   [  38% ] 1115/1191 VUs  14m18.9s/38m0s  1000.00 iters/s
+
+running (14m19.9s), 1132/1191 VUs, 687506 complete and 0 interrupted iterations
+load_1000   [  38% ] 1132/1191 VUs  14m19.9s/38m0s  1000.00 iters/s
+
+running (14m20.9s), 1127/1191 VUs, 688510 complete and 0 interrupted iterations
+load_1000   [  38% ] 1127/1191 VUs  14m20.9s/38m0s  1000.00 iters/s
+
+running (14m21.9s), 1125/1191 VUs, 689512 complete and 0 interrupted iterations
+load_1000   [  38% ] 1125/1191 VUs  14m21.9s/38m0s  1000.00 iters/s
+
+running (14m22.9s), 1119/1191 VUs, 690519 complete and 0 interrupted iterations
+load_1000   [  38% ] 1119/1191 VUs  14m22.9s/38m0s  1000.00 iters/s
+
+running (14m23.9s), 1110/1191 VUs, 691527 complete and 0 interrupted iterations
+load_1000   [  38% ] 1110/1191 VUs  14m23.9s/38m0s  1000.00 iters/s
+
+running (14m24.9s), 1142/1191 VUs, 692496 complete and 0 interrupted iterations
+load_1000   [  38% ] 1142/1191 VUs  14m24.9s/38m0s  1000.00 iters/s
+time="2025-11-21T05:08:53Z" level=warning msg="Request Failed" error="Post \"http://api:8000/analyze/photo\": read tcp 172.18.0.5:46352->172.18.0.4:8000: read: connection reset by peer"
+
+running (14m25.9s), 1110/1191 VUs, 693528 complete and 0 interrupted iterations
+load_1000   [  38% ] 1110/1191 VUs  14m25.9s/38m0s  1000.00 iters/s
+
+running (14m26.9s), 1141/1191 VUs, 694497 complete and 0 interrupted iterations
+load_1000   [  38% ] 1141/1191 VUs  14m26.9s/38m0s  1000.00 iters/s
+
+running (14m27.9s), 1145/1191 VUs, 695492 complete and 0 interrupted iterations
+load_1000   [  38% ] 1145/1191 VUs  14m27.9s/38m0s  1000.00 iters/s
+
+running (14m28.9s), 1130/1191 VUs, 696507 complete and 0 interrupted iterations
+load_1000   [  38% ] 1130/1191 VUs  14m28.9s/38m0s  1000.00 iters/s
+time="2025-11-21T05:08:57Z" level=warning msg="Request Failed" error="Post \"http://api:8000/analyze/chat\": read tcp 172.18.0.5:46862->172.18.0.4:8000: read: connection reset by peer"
+
+running (14m29.9s), 1107/1191 VUs, 697531 complete and 0 interrupted iterations
+load_1000   [  38% ] 1107/1191 VUs  14m29.9s/38m0s  1000.00 iters/s
+
+running (14m30.9s), 1127/1191 VUs, 698511 complete and 0 interrupted iterations
+load_1000   [  38% ] 1127/1191 VUs  14m30.9s/38m0s  1000.00 iters/s
+time="2025-11-21T05:08:58Z" level=warning msg="Request Failed" error="Post \"http://api:8000/trust/generate\": read tcp 172.18.0.5:60828->172.18.0.4:8000: read: connection reset by peer"
+
+running (14m31.9s), 1128/1191 VUs, 699509 complete and 0 interrupted iterations
+load_1000   [  38% ] 1128/1191 VUs  14m31.9s/38m0s  1000.00 iters/s
+
+running (14m32.9s), 1142/1191 VUs, 700496 complete and 0 interrupted iterations
+load_1000   [  38% ] 1142/1191 VUs  14m32.9s/38m0s  1000.00 iters/s
+
+running (14m33.9s), 1131/1191 VUs, 701505 complete and 0 interrupted iterations
+load_1000   [  38% ] 1131/1191 VUs  14m33.9s/38m0s  1000.00 iters/s
