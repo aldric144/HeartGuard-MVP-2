@@ -79,11 +79,12 @@ export const scenarios = {
   },
 };
 
-export function generateTestUser(vuId) {
+export function generateTestUser(vuId, iterId) {
+  const uniqueId = iterId !== undefined ? `${vuId}_${iterId}` : vuId;
   return {
-    email: `loadtest_user_${vuId}@heartguard.test`,
+    email: `loadtest_user_${uniqueId}@heartguard.test`,
     password: 'LoadTest2024!',
-    name: `Test User ${vuId}`,
+    name: `Test User ${uniqueId}`,
   };
 }
 
