@@ -277,7 +277,17 @@ class PaymentInstruction(Base):
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./heartguard.db")
 
-engine = create_engine(DATABASE_URL)
+if DATABASE_URL.startswith("postgresql"):
+    engine = create_engine(
+        DATABASE_URL,
+        pool_size=20,
+        max_overflow=40,
+        pool_pre_ping=True,
+        pool_recycle=3600,
+    )
+else:
+    engine = create_engine(DATABASE_URL)
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_db():
@@ -288,7 +298,11 @@ def get_db():
         db.close()
 
 def init_db():
-    Base.metadata.create_all(bind=engine)
+    try:
+        Base.metadata.create_all(bind=engine, checkfirst=True)
+    except Exception as e:
+        print(f"Warning during database initialization: {e}")
+        pass
     
     from sqlalchemy import inspect, text
     inspector = inspect(engine)
@@ -422,7 +436,11 @@ def populate_safety_replies():
 def populate_geographic_risks():
     """Populate GeographicRisk table with comprehensive global romance fraud hotspot data.
     Uses upsert logic to allow safe updates and expansions."""
-    db = SessionLocal()
+    try:
+        db = SessionLocal()
+    except Exception as e:
+        print(f"Warning: Could not connect to database for geographic risks: {e}")
+        return
     
     risk_data = [
         {
@@ -797,17 +815,27 @@ def populate_geographic_risks():
         },
     ]
     
-    for entry in risk_data:
-        existing = db.query(GeographicRisk).filter(GeographicRisk.code == entry["code"]).first()
-        if existing:
-            existing.region = entry["region"]
-            existing.risk_level = entry["risk_level"]
-            existing.scam_types = entry.get("scam_types")
-            existing.notes = entry.get("notes")
-            existing.category = entry.get("category")
-        else:
-            risk = GeographicRisk(**entry)
-            db.add(risk)
-    
-    db.commit()
-    db.close()
+    try:
+        for entry in risk_data:
+            try:
+                existing = db.query(GeographicRisk).filter(GeographicRisk.code == entry["code"]).first()
+                if existing:
+                    existing.region = entry["region"]
+                    existing.risk_level = entry["risk_level"]
+                    existing.scam_types = entry.get("scam_types")
+                    existing.notes = entry.get("notes")
+                    existing.category = entry.get("category")
+                else:
+                    risk = GeographicRisk(**entry)
+                    db.add(risk)
+                db.commit()
+            except Exception as inner_e:
+                db.rollback()
+                continue
+        
+        print(f"✅ Populated geographic risk entries")
+    except Exception as e:
+        db.rollback()
+        print(f"⚠️ Error populating geographic risks: {e}")
+    finally:
+        db.close()
