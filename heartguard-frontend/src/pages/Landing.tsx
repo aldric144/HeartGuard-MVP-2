@@ -97,6 +97,41 @@ export function Landing() {
         </div>
       </section>
 
+      {/* Social Proof Section */}
+      <section className="py-12 bg-white border-b border-gray-200">
+        <div className="container mx-auto px-4">
+          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto text-center">
+            <div className="flex flex-col items-center">
+              <Users className="w-12 h-12 text-[#3C345C] mb-3" />
+              <h3 className="text-2xl font-bold text-[#2C2347] mb-1" style={{ fontFamily: "'Nunito', sans-serif" }}>
+                Trusted by thousands globally
+              </h3>
+              <p className="text-[#2A2A2A]/70">
+                Protecting people worldwide
+              </p>
+            </div>
+            <div className="flex flex-col items-center">
+              <CheckCircle className="w-12 h-12 text-[#3C345C] mb-3" />
+              <h3 className="text-2xl font-bold text-[#2C2347] mb-1" style={{ fontFamily: "'Nunito', sans-serif" }}>
+                95% danger-detection accuracy
+              </h3>
+              <p className="text-[#2A2A2A]/70">
+                AI-powered precision
+              </p>
+            </div>
+            <div className="flex flex-col items-center">
+              <Lock className="w-12 h-12 text-[#3C345C] mb-3" />
+              <h3 className="text-2xl font-bold text-[#2C2347] mb-1" style={{ fontFamily: "'Nunito', sans-serif" }}>
+                Zero judgment. 100% private.
+              </h3>
+              <p className="text-[#2A2A2A]/70">
+                Your safety, your privacy
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Problem / Pain Section */}
       <section className="py-16 md:py-24 bg-[#F9EDE2]">
         <div className="container mx-auto px-4">
@@ -1122,19 +1157,19 @@ export function Landing() {
             <div>
               <h3 className="font-bold mb-4" style={{ fontFamily: "'Nunito', sans-serif" }}>Legal</h3>
               <ul className="space-y-2 text-sm text-white/70">
-                <li><a href="/app" className="hover:text-white transition-colors">Privacy Policy</a></li>
-                <li><a href="/app" className="hover:text-white transition-colors">Terms of Use</a></li>
-                <li><a href="/app" className="hover:text-white transition-colors">Disclaimer</a></li>
-                <li><a href="/app" className="hover:text-white transition-colors">GDPR Compliance</a></li>
+                <li><a href="/privacy" className="hover:text-white transition-colors">Privacy Policy</a></li>
+                <li><a href="/terms" className="hover:text-white transition-colors">Terms of Use</a></li>
+                <li><a href="/data-policy" className="hover:text-white transition-colors">Data Policy</a></li>
+                <li><a href="/faq" className="hover:text-white transition-colors">FAQ</a></li>
               </ul>
             </div>
 
             <div>
               <h3 className="font-bold mb-4" style={{ fontFamily: "'Nunito', sans-serif" }}>Support</h3>
               <ul className="space-y-2 text-sm text-white/70">
-                <li><a href="/app" className="hover:text-white transition-colors">Safety & Trauma Support</a></li>
-                <li><a href="/app" className="hover:text-white transition-colors">Contact Us</a></li>
-                <li><a href="/app" className="hover:text-white transition-colors">Help Center</a></li>
+                <li><a href="/faq" className="hover:text-white transition-colors">FAQ</a></li>
+                <li><a href="/account" className="hover:text-white transition-colors">Account Settings</a></li>
+                <li><a href="mailto:support@heartguard.app" className="hover:text-white transition-colors">Contact Us</a></li>
                 <li><a href="/app" className="hover:text-white transition-colors">Report a Scam</a></li>
               </ul>
             </div>

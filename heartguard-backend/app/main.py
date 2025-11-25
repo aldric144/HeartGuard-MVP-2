@@ -1976,6 +1976,43 @@ async def verify_session_endpoint(session_token: str):
         raise HTTPException(status_code=401, detail="Invalid or expired session")
     return {"success": True, "user_id": session_data["user_id"], "email": session_data["email"]}
 
+@app.delete("/auth/delete-account")
+async def delete_account(user_id: int = Form(...), db: Session = Depends(get_db)):
+    """
+    Delete user account and all associated data.
+    PART 7: Security - Delete account endpoint with DB cleanup
+    """
+    try:
+        db.query(DBChatAnalysis).filter(DBChatAnalysis.user_id == user_id).delete()
+        db.query(DBPhotoAnalysis).filter(DBPhotoAnalysis.user_id == user_id).delete()
+        
+        db.query(DBTrustReport).filter(DBTrustReport.user_id == user_id).delete()
+        
+        db.query(AnalysisHistory).filter(AnalysisHistory.user_id == user_id).delete()
+        
+        db.query(DBConversation).filter(DBConversation.user_id == user_id).delete()
+        
+        # Delete manipulation patterns
+        db.query(DBManipulationPattern).filter(DBManipulationPattern.user_id == user_id).delete()
+        
+        db.query(DBAnalysisPoint).filter(DBAnalysisPoint.user_id == user_id).delete()
+        
+        db.query(DBScammerProfile).filter(DBScammerProfile.user_id == user_id).delete()
+        
+        user = db.query(User).filter(User.id == user_id).first()
+        if user:
+            db.delete(user)
+        
+        db.commit()
+        
+        return {
+            "success": True,
+            "message": "Account and all associated data deleted successfully"
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete account: {str(e)}")
+
 @app.post("/stripe/create-checkout")
 async def create_stripe_checkout(user_id: int = Form(...), tier: str = Form(...), success_url: str = Form("https://heart-guard-mvp-2.vercel.app/success"), cancel_url: str = Form("https://heart-guard-mvp-2.vercel.app/pricing"), db: Session = Depends(get_db)):
     """Create Stripe checkout session for subscription."""
