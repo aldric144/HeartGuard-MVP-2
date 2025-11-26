@@ -16,6 +16,13 @@ import { ForgotPassword } from './pages/auth/ForgotPassword'
 import { ResetPassword } from './pages/auth/ResetPassword'
 import { QATestAuth } from './pages/auth/QATestAuth'
 import { Toaster } from './components/ui/toaster'
+import Privacy from './pages/legal/Privacy'
+import Terms from './pages/legal/Terms'
+import DataPolicy from './pages/legal/DataPolicy'
+import FAQ from './pages/legal/FAQ'
+import ContactUs from './pages/support/ContactUs'
+import ReportScam from './pages/support/ReportScam'
+import AccountSettings from './pages/AccountSettings'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -29,6 +36,15 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/auth/forgot" element={<ForgotPassword />} />
           <Route path="/auth/reset" element={<ResetPassword />} />
           <Route path="/verify" element={<Verify />} />
+          
+          {/* Legal & Support Pages */}
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/data-policy" element={<DataPolicy />} />
+          <Route path="/faq" element={<FAQ />} />
+          <Route path="/support/contact" element={<ContactUs />} />
+          <Route path="/support/report-scam" element={<ReportScam />} />
+          <Route path="/account" element={<AccountSettings />} />
           
           {/* Protected routes */}
           <Route path="/app" element={<ProtectedRoute><App /></ProtectedRoute>} />

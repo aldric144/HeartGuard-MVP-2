@@ -1169,8 +1169,8 @@ export function Landing() {
               <ul className="space-y-2 text-sm text-white/70">
                 <li><a href="/faq" className="hover:text-white transition-colors">FAQ</a></li>
                 <li><a href="/account" className="hover:text-white transition-colors">Account Settings</a></li>
-                <li><a href="mailto:support@heartguard.app" className="hover:text-white transition-colors">Contact Us</a></li>
-                <li><a href="/app" className="hover:text-white transition-colors">Report a Scam</a></li>
+                <li><a href="/support/contact" className="hover:text-white transition-colors">Contact Us</a></li>
+                <li><a href="/support/report-scam" className="hover:text-white transition-colors">Report a Scam</a></li>
               </ul>
             </div>
           </div>
