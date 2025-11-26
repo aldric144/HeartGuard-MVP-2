@@ -2,6 +2,7 @@ import { Shield, Heart, AlertTriangle, CheckCircle, Globe, Users, Lock, Download
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Link } from 'react-router-dom'
 
 export function Landing() {
   const scrollToSection = (id: string) => {
@@ -1150,27 +1151,27 @@ export function Landing() {
                 <li><button onClick={() => scrollToSection('features')} className="hover:text-white transition-colors">Features</button></li>
                 <li><button onClick={() => scrollToSection('pricing')} className="hover:text-white transition-colors">Pricing</button></li>
                 <li><button onClick={() => scrollToSection('how-it-works')} className="hover:text-white transition-colors">How It Works</button></li>
-                <li><a href="/app" className="hover:text-white transition-colors">Get Started</a></li>
+                <li><Link to="/app" className="hover:text-white transition-colors">Get Started</Link></li>
               </ul>
             </div>
 
             <div>
               <h3 className="font-bold mb-4" style={{ fontFamily: "'Nunito', sans-serif" }}>Legal</h3>
               <ul className="space-y-2 text-sm text-white/70">
-                <li><a href="/privacy" className="hover:text-white transition-colors">Privacy Policy</a></li>
-                <li><a href="/terms" className="hover:text-white transition-colors">Terms of Use</a></li>
-                <li><a href="/data-policy" className="hover:text-white transition-colors">Data Policy</a></li>
-                <li><a href="/faq" className="hover:text-white transition-colors">FAQ</a></li>
+                <li><Link to="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link></li>
+                <li><Link to="/terms" className="hover:text-white transition-colors">Terms of Use</Link></li>
+                <li><Link to="/data-policy" className="hover:text-white transition-colors">Data Policy</Link></li>
+                <li><Link to="/faq" className="hover:text-white transition-colors">FAQ</Link></li>
               </ul>
             </div>
 
             <div>
               <h3 className="font-bold mb-4" style={{ fontFamily: "'Nunito', sans-serif" }}>Support</h3>
               <ul className="space-y-2 text-sm text-white/70">
-                <li><a href="/faq" className="hover:text-white transition-colors">FAQ</a></li>
-                <li><a href="/account" className="hover:text-white transition-colors">Account Settings</a></li>
-                <li><a href="/support/contact" className="hover:text-white transition-colors">Contact Us</a></li>
-                <li><a href="/support/report-scam" className="hover:text-white transition-colors">Report a Scam</a></li>
+                <li><Link to="/faq" className="hover:text-white transition-colors">FAQ</Link></li>
+                <li><Link to="/account" className="hover:text-white transition-colors">Account Settings</Link></li>
+                <li><Link to="/support/contact" className="hover:text-white transition-colors">Contact Us</Link></li>
+                <li><Link to="/support/report-scam" className="hover:text-white transition-colors">Report a Scam</Link></li>
               </ul>
             </div>
           </div>
